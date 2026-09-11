@@ -93,11 +93,11 @@ export function computeDashboardMetrics(params: {
     const last = [...pages].sort((a, b) => a.page_number - b.page_number)[pages.length - 1];
     fuelLevel = roundToOneDecimal(last.end_fuel_balance);
   } else if (vehicle) {
-    fuelLevel = roundToOneDecimal(vehicle.current_fuel_level);
+    fuelLevel = roundToOneDecimal(vehicle.current_fuel_level ?? 0);
   } else {
     fuelLevel = 0;
   }
-  const tankCapacity = vehicle ? roundToOneDecimal(vehicle.tank_capacity) : 0;
+  const tankCapacity = vehicle ? roundToOneDecimal(vehicle.tank_capacity ?? 0) : 0;
   const fuelLevelPercent = tankCapacity > 0 ? roundToOneDecimal(Math.min(100, Math.max(0, (fuelLevel / tankCapacity) * 100))) : 0;
 
   return { officialKm, privateKm, totalKm, tripCount, fuelLevel, tankCapacity, fuelLevelPercent };
