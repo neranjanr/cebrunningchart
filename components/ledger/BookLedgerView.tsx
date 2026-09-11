@@ -8,6 +8,7 @@ import { PageNavigation } from './PageNavigation';
 import { computeLedgerDays, computeLedgerSummary, groupTripsByDateForSide1 } from '@/lib/ledgerCalculations';
 import { getFuelEconomiesForPage, saveFuelEconomiesForPage } from '@/lib/fuelEconomyStore';
 import { roundToOneDecimal } from '@/lib/tripCalculations';
+import { ExcelExportButton } from '@/components/ExcelExportButton';
 
 interface Props {
   pages: BookPage[];
@@ -138,6 +139,9 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
         onNextMonth={handleNextMonth}
         vehicleLabel={vehicleLabel}
       />
+      <div className="flex flex-wrap items-center justify-end gap-2 mb-3 print:hidden">
+        <ExcelExportButton pages={sortedPages} trips={trips} vehicle={vehicle} />
+      </div>
 
       {/* Physical Logbook Dual-Page Folio Canvas */}
       <div className="relative bg-paper-sheet rounded shadow-xl overflow-hidden p-2 md:p-3 print:shadow-none print:border print:border-rule-line print:p-2">

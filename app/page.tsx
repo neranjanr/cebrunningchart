@@ -11,6 +11,7 @@ import { MetricCards } from '@/components/dashboard/MetricCards';
 import { MonthlyBreakdownChart } from '@/components/dashboard/MonthlyBreakdownChart';
 import { PageWiseChart } from '@/components/dashboard/PageWiseChart';
 import { AllTripsMasterTable } from '@/components/dashboard/AllTripsMasterTable';
+import { ExcelExportButton } from '@/components/ExcelExportButton';
 
 export default function DashboardPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -51,6 +52,7 @@ export default function DashboardPage() {
           <p className="text-sm text-on-surface-variant">Summary metrics, monthly breakdown, page-wise visualization, and master trip ledger.</p>
         </div>
         <div className="flex items-center gap-2">
+          <ExcelExportButton pages={pages} trips={trips} vehicle={vehicle} variant="secondary" />
           <Link href="/trips/new" className="px-4 py-2 bg-slate-surface text-on-primary rounded-lg text-sm font-semibold hover:bg-primary transition-colors">
             + New Trip
           </Link>
