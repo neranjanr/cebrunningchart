@@ -6,8 +6,10 @@ export interface Vehicle {
   vehicle_type: string;
   fuel_type: string;
   tank_capacity: number;
-  current_odometer: number;
-  current_fuel_level: number;
+  current_odometer: number; // Book Opening KM (earliest Page start) — also tracks latest for continuity fallback
+  /** @deprecated removed in Phase 2 Issue 03 — use Book Opening fuel instead; kept optional for migration */
+  current_fuel_level?: number;
+  registration_no?: string; // Phase 2: Vehicle Registration No (paper header)
   created_at?: string;
   updated_at?: string;
 }

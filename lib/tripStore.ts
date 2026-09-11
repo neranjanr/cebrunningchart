@@ -1,7 +1,13 @@
 import { Trip, BookPage } from '@/types';
 import { supabase, isSupabaseConfigured } from './supabase/client';
 import { getVehicleProfile, saveVehicleProfile, DEFAULT_VEHICLE } from './vehicleStore';
-import { assignPageForNewTrip, calculateConsumed, calculateBalance } from './pagination';
+import {
+  assignPageForNewTrip,
+  calculateConsumed,
+  calculateBalance,
+  getEarliestOverallDate,
+  renumberPagesChronologically,
+} from './pagination';
 import { getPages, savePage, createNextPage, updatePageEndValues } from './pageStore';
 import { getMonthKey } from './pagination';
 import { roundToOneDecimal, roundToIntegerKm } from './tripCalculations';
@@ -100,7 +106,7 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
     const defaultEconomy = 10.5;
     const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
     const initialFuelEnd = calculateBalance(
-      roundToOneDecimal(vehicle.current_fuel_level),
+      roundToOneDecimal(vehicle.current_fuel_level ?? 0),
       roundToOneDecimal(input.fuel_pumped_amount ?? 0),
       consumed
     );
@@ -109,9 +115,9 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
       vehicle_id: vehicle.id,
       page_number: 1,
       month: getMonthKey(input.date),
-      start_km: roundToIntegerKm(vehicle.current_odometer),
+      start_km: roundToIntegerKm(vehicle.current_odometer ?? 0),
       end_km: roundToIntegerKm(input.end_km),
-      start_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level),
+      start_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level ?? 0),
       end_fuel_balance: initialFuelEnd,
       created_at: new Date().toISOString(),
     };
@@ -205,6 +211,26 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
     await saveVehicleProfile({ current_fuel_level: roundToOneDecimal(targetPage!.end_fuel_balance) });
   } catch (e) {
     console.warn('Failed to update vehicle odometer', e);
+  }
+
+  // Chronological renumber on back-dated insertion: if new date precedes earliest page,
+  // sort pages chronologically and cascade page_number/page_id + Trip.page_id.
+  // Dates are never mutated; pagination constraints preserved (grouping unchanged).
+  // Spec example: book starts 2026-01-01 Page 1 at 50,000 km, then 2025-01-01 trips inserted as new Pages 1-2, old Page renumbered.
+  try {
+    const earliestBefore = getEarliestOverallDate(pages, allTrips);
+    const isBackdated = earliestBefore !== null && input.date < earliestBefore;
+    if (isBackdated) {
+      const pagesAfter = await getPages();
+      const tripsAfter = [...readLocalTrips()];
+      const { pages: renumberedPages, trips: renumberedTrips } = renumberPagesChronologically(pagesAfter, tripsAfter);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fleetledger_book_pages', JSON.stringify(renumberedPages.sort((a, b) => a.page_number - b.page_number)));
+        localStorage.setItem('fleetledger_trips', JSON.stringify(renumberedTrips));
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to apply chronological renumber after backdated trip', e);
   }
 
   return newTrip;

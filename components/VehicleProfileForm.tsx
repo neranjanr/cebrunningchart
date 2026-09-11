@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Vehicle } from '@/types';
 import { getVehicleProfile, saveVehicleProfile } from '@/lib/vehicleStore';
+import { recalculateFromBookOpening } from '@/lib/pageStore';
 
 export default function VehicleProfileForm() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -34,8 +35,19 @@ export default function VehicleProfileForm() {
     setSaving(true);
     setSuccessMessage('');
     try {
+      const previous = await getVehicleProfile();
       const updated = await saveVehicleProfile(vehicle);
       setVehicle(updated);
+      // If Book Opening (odometer/fuel) changed, recalculate ledger balances forward from earliest Page
+      const openingKmChanged = previous.current_odometer !== updated.current_odometer;
+      const openingFuelChanged = previous.current_fuel_level !== updated.current_fuel_level;
+      if (openingKmChanged || openingFuelChanged) {
+        try {
+          await recalculateFromBookOpening(updated.current_odometer ?? 0, updated.current_fuel_level ?? 0);
+        } catch (err) {
+          console.warn('Failed to recalculate pages from Book Opening', err);
+        }
+      }
       setSuccessMessage('Vehicle profile saved successfully!');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err) {
@@ -141,20 +153,21 @@ export default function VehicleProfileForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Current Odometer (KM)</label>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Book Opening KM (KM)</label>
             <input
               type="number"
-              step="0.1"
+              step="1"
               name="current_odometer"
               value={vehicle.current_odometer}
               onChange={handleChange}
               required
               className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none font-mono"
             />
+            <p className="text-[11px] text-zinc-500 mt-1">Integer KM — opening odometer for Book Opening</p>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Current Fuel Level (L)</label>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Book Opening Fuel (L)</label>
             <input
               type="number"
               step="0.1"
@@ -162,6 +175,19 @@ export default function VehicleProfileForm() {
               value={vehicle.current_fuel_level}
               onChange={handleChange}
               required
+              className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none font-mono"
+            />
+            <p className="text-[11px] text-zinc-500 mt-1">Re-editable after retroactive insertion — recalculates forward</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Registration No</label>
+            <input
+              type="text"
+              name="registration_no"
+              value={vehicle.registration_no ?? ''}
+              onChange={handleChange}
+              placeholder="CAB-1234"
               className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-cyan-500 focus:outline-none font-mono"
             />
           </div>

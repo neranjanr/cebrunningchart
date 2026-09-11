@@ -10,8 +10,9 @@ export const DEFAULT_VEHICLE: Vehicle = {
   vehicle_type: 'Double Cab',
   fuel_type: 'Diesel',
   tank_capacity: 80.0,
-  current_odometer: 12500.0,
-  current_fuel_level: 65.0,
+  current_odometer: 50000,
+  current_fuel_level: 10.0,
+  registration_no: 'CAB-1234',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -33,7 +34,14 @@ export async function getVehicleProfile(): Promise<Vehicle> {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (stored) {
       try {
-        return JSON.parse(stored) as Vehicle;
+        const parsed = JSON.parse(stored) as Vehicle;
+        // Migration: map legacy current_fuel_level to no-op, ensure registration_no exists
+        if (!parsed.registration_no) {
+          parsed.registration_no = DEFAULT_VEHICLE.registration_no;
+        }
+        // Remove deprecated current_fuel_level from returned profile if present but keep for backward compat writes?
+        // Keep it if existing but don't require it; consumers should use Book Opening.
+        return parsed;
       } catch (e) {
         console.error('Error parsing stored vehicle profile', e);
       }

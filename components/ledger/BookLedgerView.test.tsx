@@ -113,11 +113,11 @@ describe('BookLedgerView - Dual-Side Physical Book Ledger', () => {
       makeTrip({ date: '2024-10-22', page_id: 'page-14', trip_index: 1, start_km: 162.6, end_km: 227.8, trip_distance: 65.2, fuel_pumped_amount: 35, fuel_order_no: '#FO-1' }),
     ];
     render(<BookLedgerView pages={[page]} trips={trips} vehicle={vehicle} />);
-    // Table 1 shows per-day distances (appears in Side1 subtotal + both tables, so use AllBy)
-    expect(screen.getAllByText('62.6').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('65.2').length).toBeGreaterThanOrEqual(1);
+    // Table 1 shows per-day distances as Integer KM (fuel 1 decimal) — 62.6→63, 65.2→65
+    expect(screen.getAllByText('63').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('65').length).toBeGreaterThanOrEqual(1);
     // Consumed and balance values should appear (6.0, 25.4 etc)
-    expect(screen.getAllByText('6.0').length).toBeGreaterThanOrEqual(1); // Day1 consumed 62.6/10.5
+    expect(screen.getAllByText('6.0').length).toBeGreaterThanOrEqual(1); // Day1 consumed 63/10.5=6.0 (62.6 also 6.0)
     expect(screen.getAllByText('25.4 L').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('6.2').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('54.2 L').length).toBeGreaterThanOrEqual(1);
@@ -136,12 +136,9 @@ describe('BookLedgerView - Dual-Side Physical Book Ledger', () => {
     expect(inputs.length).toBe(3);
     // Change Day 1 economy to 10.8
     fireEvent.change(inputs[0], { target: { value: '10.8' } });
-    // Day 2 and 3 should now show inherited 10.8? The propagated display shows 10.8 for those days
-    // We check that after change, the displayed propagated values include 10.8 twice more
-    // The input placeholders show propagated, but we can check visible text "10.8"
-    // There should be at least two occurrences of 10.8 after propagation (Day1 explicit and Day2/3 inherited)
-    // Use getAllByText to count
-    const occurrences = screen.getAllByText('10.8');
+    // Day 2 and 3 should now show inherited 10.8 — displayed as "Adjusted 10.8" or "(Inh.) 10.8"
+    // Use a function matcher to find any element containing 10.8 substring
+    const occurrences = await screen.findAllByText((content, element) => Boolean(element?.textContent?.includes('10.8')));
     expect(occurrences.length).toBeGreaterThanOrEqual(1);
   });
 

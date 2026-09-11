@@ -21,11 +21,12 @@ export interface LedgerDay {
   fuelEconomy: number;
   economySource: 'explicit' | 'inherited' | 'fallback';
   fuelPosition: number;
+  inTank: number; // Phase 2 Issue 03: In-Tank Fuel per Day Group, default 0
   drawn: number;
   fuelOrderNo: string; // aggregated, empty if none
   fuelOrderDate: string; // date of first drawn entry if any
   consumed: number;
-  balance: number;
+  balance: number; // Closing Balance = Position + InTank + Drawn - Consumed
 }
 
 export interface LedgerSummary {
@@ -83,8 +84,9 @@ export function computeLedgerDays(params: {
   trips: Trip[];
   economies?: (number | null | undefined)[];
   fallbackEconomy?: number;
+  inTanks?: (number | null | undefined)[];
 }): LedgerDay[] {
-  const { page, trips, economies, fallbackEconomy } = params;
+  const { page, trips, economies, fallbackEconomy, inTanks } = params;
   const tripsForPage = getTripsForPage(trips, page.id);
   if (tripsForPage.length === 0) return [];
 
@@ -99,6 +101,13 @@ export function computeLedgerDays(params: {
   }
 
   const propagated = propagateFuelEconomy(raw, fallbackEconomy ?? DEFAULT_FUEL_ECONOMY);
+
+  // Map inTanks to distinctDates order (default 0 per Day Group)
+  const rawInTanks: (number | null | undefined)[] = [];
+  for (let i = 0; i < distinctDates.length; i++) {
+    if (inTanks && i < inTanks.length) rawInTanks.push(inTanks[i]);
+    else rawInTanks.push(0);
+  }
 
   const days: LedgerDay[] = [];
   let prevBalance = roundToOneDecimal(page.start_fuel_balance);
@@ -136,8 +145,9 @@ export function computeLedgerDays(params: {
     const fuelOrderDate = drawn > 0 ? date : '';
 
     const fuelPosition = roundToOneDecimal(prevBalance);
+    const inTank = roundToOneDecimal(rawInTanks[i] ?? 0);
     const consumed = calculateConsumed(distance, econ);
-    const balance = calculateBalance(fuelPosition, drawn, consumed);
+    const balance = calculateBalance(fuelPosition, drawn, consumed, inTank);
 
     days.push({
       dayIndex: i + 1,
@@ -149,6 +159,7 @@ export function computeLedgerDays(params: {
       fuelEconomy: econ,
       economySource,
       fuelPosition,
+      inTank,
       drawn,
       fuelOrderNo,
       fuelOrderDate,

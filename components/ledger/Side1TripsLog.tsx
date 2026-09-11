@@ -65,20 +65,20 @@ export function Side1TripsLog({ pageNumber, month, dayGroups, grandTotals }: Pro
         </span>
       </div>
 
-      <div className="overflow-x-auto w-full">
-        <table className="w-full text-left text-on-surface">
-          <thead>
+      <div className="overflow-x-auto w-full border border-rule-line-strong rounded">
+        <table className="w-full text-left text-on-surface border-collapse">
+          <thead className="sticky top-0 z-10">
             <tr className="bg-primary-container text-on-primary">
-              <th className="py-1 px-1.5 text-[10px] font-semibold tracking-widest uppercase text-center w-16">Date</th>
-              <th className="py-1 px-1 text-[10px] font-semibold tracking-widest uppercase text-center w-8">#</th>
-              <th className="py-1 px-1 text-[10px] font-semibold tracking-widest uppercase text-center w-12">Dep.</th>
-              <th className="py-1 px-1 text-[10px] font-semibold tracking-widest uppercase text-center w-12">Arr.</th>
-              <th className="py-1 px-1.5 text-[10px] font-semibold tracking-widest uppercase text-right w-20">Start KM</th>
-              <th className="py-1 px-1.5 text-[10px] font-semibold tracking-widest uppercase text-right w-20">End KM</th>
-              <th className="py-1 px-1.5 text-[10px] font-semibold tracking-widest uppercase text-right w-16">Dist</th>
-              <th className="py-1 px-1.5 text-[10px] font-semibold tracking-widest uppercase text-center w-16">Type</th>
-              <th className="py-1 px-2 text-[10px] font-semibold tracking-widest uppercase">Route / Purpose</th>
-              <th className="py-1 px-2 text-[10px] font-semibold tracking-widest uppercase text-right w-28">Fuel Voucher</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-center w-16 border border-rule-line-strong">Date</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-center w-8 border border-rule-line-strong">#</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-center w-12 border border-rule-line-strong">Dep.</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-center w-12 border border-rule-line-strong">Arr.</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-right w-20 border border-rule-line-strong">Start KM</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-right w-20 border border-rule-line-strong">End KM</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-right w-16 border border-rule-line-strong">Dist</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-center w-16 border border-rule-line-strong">Type</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong">Route / Purpose</th>
+              <th className="py-2 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-right w-28 border border-rule-line-strong">Fuel Voucher</th>
             </tr>
           </thead>
           <tbody className="text-[13px] leading-[18px] font-medium divide-y-0">
@@ -91,40 +91,40 @@ export function Side1TripsLog({ pageNumber, month, dayGroups, grandTotals }: Pro
                       <span className="text-[10px] font-semibold tracking-widest uppercase">
                         DAY {group.dayIndex}: {getDayOfWeek(group.date).toUpperCase()}, {group.date}
                       </span>
-                      <span className="text-[10px] font-medium tracking-widest uppercase text-on-surface-variant">Opening Odo: {group.startKm.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KM</span>
+                      <span className="text-[10px] font-medium tracking-widest uppercase text-on-surface-variant">Opening Odo: {group.startKm} KM</span>
                     </div>
                   </td>
                 </tr>
                 {group.trips.map((t: Trip, idx: number) => (
                   <tr key={t.id} className={`${idx % 2 === 0 ? 'bg-paper-sheet' : 'bg-paper-ledger'} hover:bg-surface-container-low transition-colors`}>
-                    <td className="py-1 px-1.5 text-center text-[10px] font-semibold tracking-widest text-on-surface-variant">
+                    <td className="py-2 px-2.5 text-center text-[10px] font-semibold tracking-widest text-on-surface-variant border border-rule-line">
                       {t.date.slice(5).replace('-', '/')} {getDayOfWeek(t.date).slice(0, 3)}
                     </td>
-                    <td className="py-1 px-1 text-center font-mono text-sm font-semibold">{t.trip_index}</td>
-                    <td className="py-1 px-1 text-center font-mono text-sm">{t.start_time}</td>
-                    <td className="py-1 px-1 text-center font-mono text-sm">{t.end_time}</td>
-                    <td className="py-1 px-1.5 text-right font-mono text-sm">{t.start_km.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                    <td className="py-1 px-1.5 text-right font-mono text-sm">{t.end_km.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
-                    <td className="py-1 px-1.5 text-right font-mono text-sm font-bold text-on-surface">{t.trip_distance.toFixed(1)}</td>
-                    <td className="py-1 px-1.5 text-center">
+                    <td className="py-2 px-2.5 text-center font-mono text-sm font-semibold border border-rule-line">{t.trip_index}</td>
+                    <td className="py-2 px-2.5 text-center font-mono text-sm border border-rule-line">{t.start_time || '-'}</td>
+                    <td className="py-2 px-2.5 text-center font-mono text-sm border border-rule-line">{t.end_time}</td>
+                    <td className="py-2 px-2.5 text-right font-mono text-sm border border-rule-line">{Math.round(t.start_km)}</td>
+                    <td className="py-2 px-2.5 text-right font-mono text-sm border border-rule-line">{Math.round(t.end_km)}</td>
+                    <td className="py-2 px-2.5 text-right font-mono text-sm font-bold text-on-surface border border-rule-line">{Math.round(t.trip_distance)}</td>
+                    <td className="py-2 px-2.5 text-center border border-rule-line">
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase ${t.trip_type === 'Official' ? 'bg-surface-container-highest text-trip-official' : 'bg-surface-container text-trip-private'}`}>
                         {t.trip_type.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-1 px-2 truncate max-w-[140px]" title={t.places_visited}>{t.places_visited}</td>
-                    <td className="py-1 px-2 text-right text-[10px] font-semibold tracking-widest text-on-surface-variant">
+                    <td className="py-2 px-2.5 truncate max-w-[140px] border border-rule-line" title={t.places_visited}>{t.places_visited}</td>
+                    <td className="py-2 px-2.5 text-right text-[10px] font-semibold tracking-widest text-on-surface-variant border border-rule-line">
                       {t.fuel_pumped_amount && t.fuel_pumped_amount > 0 ? `${t.fuel_pumped_amount.toFixed(1)} L${t.fuel_order_no ? ` (${t.fuel_order_no})` : ''}` : '-'}
                     </td>
                   </tr>
                 ))}
                 {/* Subtotal */}
                 <tr className="bg-surface-container-low font-semibold text-on-surface">
-                  <td colSpan={6} className="py-1 px-2 text-right text-[10px] font-semibold tracking-widest uppercase text-on-surface-variant">
+                  <td colSpan={6} className="py-2 px-2.5 text-right text-[11px] font-semibold tracking-widest uppercase text-on-surface-variant border border-rule-line-strong">
                     Day {group.dayIndex} Subtotals ({group.trips.length} Trips):
                   </td>
-                  <td className="py-1 px-1.5 text-right font-mono text-sm font-bold text-primary">{group.distance.toFixed(1)}</td>
-                  <td colSpan={3} className="py-1 px-2 text-[10px] font-semibold tracking-widest text-on-surface-variant">
-                    Off: {group.officialKm.toFixed(1)} km | Priv: {group.privateKm.toFixed(1)} km
+                  <td className="py-2 px-2.5 text-right font-mono text-sm font-bold text-primary border border-rule-line-strong">{group.distance}</td>
+                  <td colSpan={3} className="py-2 px-2.5 text-[11px] font-semibold tracking-widest text-on-surface-variant border border-rule-line-strong">
+                    Off: {group.officialKm} km | Priv: {group.privateKm} km
                   </td>
                 </tr>
               </React.Fragment>
@@ -132,10 +132,10 @@ export function Side1TripsLog({ pageNumber, month, dayGroups, grandTotals }: Pro
           </tbody>
           <tfoot>
             <tr className="bg-slate-surface text-on-primary font-bold">
-              <td colSpan={6} className="py-2 px-2 text-right text-[10px] font-semibold tracking-widest uppercase">Page {pageNumber} Grand Distance Totals:</td>
-              <td className="py-2 px-1.5 text-right font-mono text-sm text-tertiary-fixed">{grandTotals.totalDistance.toFixed(1)}</td>
-              <td colSpan={3} className="py-2 px-2 text-[10px] font-semibold tracking-widest uppercase text-surface-container-highest">
-                Official: {grandTotals.officialKm.toFixed(1)} KM | Private: {grandTotals.privateKm.toFixed(1)} KM | Trips: {grandTotals.tripCount}
+              <td colSpan={6} className="py-2.5 px-2.5 text-right text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong">Page {pageNumber} Grand Distance Totals:</td>
+              <td className="py-2.5 px-2.5 text-right font-mono text-sm text-tertiary-fixed border border-rule-line-strong">{grandTotals.totalDistance}</td>
+              <td colSpan={3} className="py-2.5 px-2.5 text-[11px] font-semibold tracking-widest uppercase text-surface-container-highest border border-rule-line-strong">
+                Official: {grandTotals.officialKm} KM | Private: {grandTotals.privateKm} KM | Trips: {grandTotals.tripCount}
               </td>
             </tr>
           </tfoot>

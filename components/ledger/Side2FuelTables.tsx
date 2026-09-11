@@ -10,10 +10,12 @@ interface Props {
   summary: LedgerSummary;
   vehicleTankCapacity: number;
   rawEconomies: (number | null)[];
+  rawInTanks: (number | null)[];
   onEconomyChange: (dayIndex: number, value: string) => void;
+  onInTankChange: (dayIndex: number, value: string) => void;
 }
 
-export function Side2FuelTables({ pageNumber, ledgerDays, summary, vehicleTankCapacity, rawEconomies, onEconomyChange }: Props) {
+export function Side2FuelTables({ pageNumber, ledgerDays, summary, vehicleTankCapacity, rawEconomies, rawInTanks, onEconomyChange, onInTankChange }: Props) {
   if (ledgerDays.length === 0) {
     return (
       <div className="flex flex-col bg-paper-ledger p-2 md:p-3 rounded shadow-sm print:shadow-none print:border print:border-rule-line">
@@ -42,37 +44,63 @@ export function Side2FuelTables({ pageNumber, ledgerDays, summary, vehicleTankCa
         <span className="text-[10px] font-semibold tracking-widest text-surface-container-highest uppercase">PAGE {pageNumber}-B BALANCE MATRIX</span>
       </div>
 
-      {/* TABLE 1 */}
+      {/* TABLE 1 — Transposed: days as columns */}
       <div>
         <div className="flex items-center justify-between bg-primary-container text-on-primary px-2 py-1 rounded-t">
           <div className="flex items-center gap-1.5">
             <span className="text-sm text-telemetry-cyan">◈</span>
             <span className="text-[10px] font-bold tracking-widest uppercase text-paper-sheet">TABLE 1 • FUEL ECONOMY & CONSUMPTION ANALYSIS</span>
           </div>
-          <span className="text-[10px] font-semibold tracking-widest uppercase text-surface-container-highest">Propagating Forward (1 Dec. Pl.)</span>
+          <span className="text-[10px] font-semibold tracking-widest uppercase text-surface-container-highest">Transposed — Days as Columns</span>
         </div>
-        <div className="overflow-x-auto w-full">
-          <table className="w-full text-left text-on-surface">
-            <thead>
-              <tr className="bg-surface-container-high text-on-surface text-[10px] font-semibold tracking-widest uppercase">
-                <th className="py-1 px-1.5 text-center w-12">Day</th>
-                <th className="py-1 px-2 w-24">Date</th>
-                <th className="py-1 px-2 text-right">Start KM</th>
-                <th className="py-1 px-2 text-right">End KM</th>
-                <th className="py-1 px-2 text-right">Daily Dist (KM)</th>
-                <th className="py-1 px-2 text-right">Fuel Economy (km/L)</th>
+        <div className="overflow-x-auto w-full border border-rule-line-strong rounded-b">
+          <table className="w-full text-left text-on-surface border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-surface-container-high text-on-surface">
+                <th className="py-2 px-3 text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong bg-surface-container-high sticky left-0 z-20 min-w-[160px]">Metric</th>
+                {ledgerDays.map((d) => (
+                  <th key={d.date} className="py-2 px-3 text-center text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong bg-surface-container-high min-w-[110px]">
+                    Day {d.dayIndex}
+                    <span className="block text-[10px] font-mono normal-case tracking-normal text-on-surface-variant">{d.dayLabel}</span>
+                  </th>
+                ))}
+                <th className="py-2 px-3 text-center text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong bg-surface-container-high min-w-[120px]">Total / Weighted</th>
               </tr>
             </thead>
             <tbody className="text-[13px] leading-[18px] font-medium">
-              {ledgerDays.map((d, idx) => (
-                <tr key={d.date} className={`${idx % 2 === 0 ? 'bg-paper-sheet' : 'bg-paper-ledger'} hover:bg-surface-container-low`}>
-                  <td className="py-1.5 px-1.5 text-center font-bold">Day {d.dayIndex}</td>
-                  <td className="py-1.5 px-2 text-[10px] font-semibold tracking-widest text-on-surface-variant">{d.dayLabel}</td>
-                  <td className="py-1.5 px-2 text-right font-mono text-sm">{d.startKm.toFixed(1)}</td>
-                  <td className="py-1.5 px-2 text-right font-mono text-sm">{d.endKm.toFixed(1)}</td>
-                  <td className="py-1.5 px-2 text-right font-mono text-sm font-bold">{d.distance.toFixed(1)}</td>
-                  <td className="py-1.5 px-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
+              <tr className="bg-paper-sheet">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-sheet z-10">Date</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-center border border-rule-line text-[11px] font-semibold tracking-widest text-on-surface-variant">{d.dayLabel}</td>
+                ))}
+                <td className="py-2.5 px-3 text-center border border-rule-line-strong bg-surface-container-low text-[11px] tracking-widest">—</td>
+              </tr>
+              <tr className="bg-paper-ledger">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-ledger z-10">Start KM</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-right font-mono text-sm border border-rule-line">{d.startKm}</td>
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm border border-rule-line-strong bg-surface-container-low">—</td>
+              </tr>
+              <tr className="bg-paper-sheet">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-sheet z-10">End KM</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-right font-mono text-sm border border-rule-line">{d.endKm}</td>
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm border border-rule-line-strong bg-surface-container-low">{ledgerDays[ledgerDays.length - 1]?.endKm ?? 0}</td>
+              </tr>
+              <tr className="bg-paper-ledger">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-ledger z-10">Daily Dist (KM)</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-right font-mono text-sm font-bold border border-rule-line">{d.distance}</td>
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm font-bold text-primary border border-rule-line-strong bg-surface-container-low">{summary.totalDistance} KM</td>
+              </tr>
+              <tr className="bg-paper-sheet">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-sheet z-10">Fuel Economy (km/L)</td>
+                {ledgerDays.map((d, idx) => (
+                  <td key={d.date} className="py-2 px-3 text-center border border-rule-line">
+                    <div className="flex flex-col items-center gap-1">
                       <input
                         aria-label={`Fuel Economy Day ${d.dayIndex}`}
                         type="number"
@@ -80,89 +108,109 @@ export function Side2FuelTables({ pageNumber, ledgerDays, summary, vehicleTankCa
                         placeholder={d.fuelEconomy.toFixed(1)}
                         value={rawEconomies[idx] !== null && rawEconomies[idx] !== undefined ? String(rawEconomies[idx]) : ''}
                         onChange={(e) => onEconomyChange(idx, e.target.value)}
-                        className="w-16 px-1.5 py-0.5 border border-rule-line rounded text-right font-mono text-sm focus:ring-1 focus:ring-telemetry-cyan focus:outline-none print:border-none print:bg-transparent"
+                        className="w-20 px-1.5 py-0.5 border border-rule-line rounded text-center font-mono text-sm focus:ring-1 focus:ring-telemetry-cyan focus:outline-none"
                       />
-                      <span className={`text-[9px] font-bold tracking-widest uppercase px-1 rounded ${d.economySource === 'explicit' ? 'bg-surface-container-highest text-telemetry-cyan' : d.economySource === 'inherited' ? 'text-on-surface-variant' : 'text-on-surface-variant'}`}>
+                      <span className="text-[11px] font-mono text-on-surface">{d.fuelEconomy.toFixed(1)}</span>
+                      <span className={`text-[9px] font-bold tracking-widest uppercase px-1 rounded ${d.economySource === 'explicit' ? 'bg-surface-container-highest text-telemetry-cyan' : 'text-on-surface-variant'}`}>
                         {d.economySource === 'explicit' ? 'Adjusted' : d.economySource === 'inherited' ? '(Inh.)' : '(Def.)'}
                       </span>
                     </div>
-                    {/* Show propagated value when inherited */}
-                    {d.economySource !== 'explicit' && (
-                      <span className="text-[10px] font-mono text-on-surface-variant">{d.fuelEconomy.toFixed(1)}</span>
-                    )}
                   </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-surface-container-high font-bold text-on-surface">
-                <td colSpan={4} className="py-1 px-2 text-right text-[10px] font-semibold tracking-widest uppercase text-on-surface-variant">
-                  Total Page Distance Tally:
-                </td>
-                <td className="py-1 px-2 text-right font-mono text-sm text-primary">{summary.totalDistance.toFixed(1)} KM</td>
-                <td className="py-1 px-2 text-right font-mono text-sm text-trip-official">Weighted: {summary.weightedEconomy.toFixed(1)} km/L</td>
+                ))}
+                <td className="py-2.5 px-3 text-center font-mono text-sm text-trip-official font-bold border border-rule-line-strong bg-surface-container-low">{summary.weightedEconomy.toFixed(1)} km/L</td>
               </tr>
-            </tfoot>
+            </tbody>
           </table>
         </div>
       </div>
 
-      {/* TABLE 2 */}
+      {/* TABLE 2 — Transposed */}
       <div>
         <div className="flex items-center justify-between bg-primary-container text-on-primary px-2 py-1 rounded-t">
           <div className="flex items-center gap-1.5">
             <span className="text-sm text-trip-official">●</span>
             <span className="text-[10px] font-bold tracking-widest uppercase text-paper-sheet">TABLE 2 • FUEL POSITION & BALANCE ACCOUNT</span>
           </div>
-          <span className="text-[10px] font-semibold tracking-widest uppercase text-surface-container-highest">Audit Tank Rule (1 Dec. Pl.)</span>
+          <span className="text-[10px] font-semibold tracking-widest uppercase text-surface-container-highest">Closing = Pos + In-Tank + Drawn − Consumed (1 Dec.)</span>
         </div>
-        <div className="overflow-x-auto w-full">
-          <table className="w-full text-left text-on-surface">
-            <thead>
-              <tr className="bg-surface-container-high text-on-surface text-[10px] font-semibold tracking-widest uppercase">
-                <th className="py-1 px-1 text-center w-10">Day</th>
-                <th className="py-1 px-1.5 text-right">Start Pos. (L)</th>
-                <th className="py-1 px-1.5 text-right">In-Tank (L)</th>
-                <th className="py-1 px-1.5 text-right">Pumped (L)</th>
-                <th className="py-1 px-2">Order No / Date</th>
-                <th className="py-1 px-1.5 text-right">Consumed (L)</th>
-                <th className="py-1 px-2 text-right">Closing Balance</th>
+        <div className="overflow-x-auto w-full border border-rule-line-strong rounded-b">
+          <table className="w-full text-left text-on-surface border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-surface-container-high text-on-surface">
+                <th className="py-2 px-3 text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong bg-surface-container-high sticky left-0 z-20 min-w-[160px]">Metric</th>
+                {ledgerDays.map((d) => (
+                  <th key={d.date} className="py-2 px-3 text-center text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong bg-surface-container-high min-w-[110px]">
+                    Day {d.dayIndex}
+                  </th>
+                ))}
+                <th className="py-2 px-3 text-center text-[11px] font-semibold tracking-widest uppercase border border-rule-line-strong bg-surface-container-high min-w-[120px]">Page Total</th>
               </tr>
             </thead>
             <tbody className="text-[13px] leading-[18px] font-medium">
-              {ledgerDays.map((d, idx) => (
-                <tr key={d.date} className={`${idx % 2 === 0 ? 'bg-paper-sheet' : 'bg-paper-ledger'} hover:bg-surface-container-low`}>
-                  <td className="py-1.5 px-1 text-center font-bold">{d.dayIndex}</td>
-                  <td className="py-1.5 px-1.5 text-right font-mono text-sm text-on-surface-variant">{d.fuelPosition.toFixed(1)}</td>
-                  <td className="py-1.5 px-1.5 text-right font-mono text-sm">{d.fuelPosition.toFixed(1)}</td>
-                  <td className={`py-1.5 px-1.5 text-right font-mono text-sm ${d.drawn > 0 ? 'text-trip-official font-bold' : 'text-on-surface-variant'}`}>
+              <tr className="bg-paper-sheet">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-sheet z-10">Start Pos. (L)</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-right font-mono text-sm border border-rule-line text-on-surface-variant">{d.fuelPosition.toFixed(1)}</td>
+                ))}
+                <td className="py-2.5 px-3 text-center border border-rule-line-strong bg-surface-container-low text-[11px]">—</td>
+              </tr>
+              <tr className="bg-paper-ledger">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-ledger z-10">In-Tank (L)</td>
+                {ledgerDays.map((d, idx) => (
+                  <td key={d.date} className="py-2 px-3 text-center border border-rule-line">
+                    <input
+                      aria-label={`In-Tank Day ${d.dayIndex}`}
+                      type="number"
+                      step="0.1"
+                      placeholder="0.0"
+                      value={rawInTanks[idx] !== null && rawInTanks[idx] !== undefined ? String(rawInTanks[idx]) : ''}
+                      onChange={(e) => onInTankChange(idx, e.target.value)}
+                      className="w-20 px-1.5 py-0.5 border border-rule-line rounded text-center font-mono text-sm focus:ring-1 focus:ring-telemetry-cyan focus:outline-none"
+                    />
+                    <span className="block text-[11px] font-mono text-on-surface-variant">{d.inTank.toFixed(1)}</span>
+                  </td>
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm border border-rule-line-strong bg-surface-container-low">{roundToOneDecimal(ledgerDays.reduce((s, d) => s + d.inTank, 0)).toFixed(1)}</td>
+              </tr>
+              <tr className="bg-paper-sheet">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-sheet z-10">Pumped (L)</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className={`py-2.5 px-3 text-right font-mono text-sm border border-rule-line ${d.drawn > 0 ? 'text-trip-official font-bold' : 'text-on-surface-variant'}`}>
                     {d.drawn > 0 ? `+${d.drawn.toFixed(1)}` : '0.0'}
                   </td>
-                  <td className="py-1.5 px-2 text-[10px] font-semibold tracking-widest">
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm font-bold text-trip-official border border-rule-line-strong bg-surface-container-low">{summary.totalDrawn.toFixed(1)}</td>
+              </tr>
+              <tr className="bg-paper-ledger">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-ledger z-10">Order No / Date</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-center text-[11px] font-semibold tracking-widest border border-rule-line">
                     {d.drawn > 0 ? (
-                      <span className="text-on-surface font-semibold">{d.fuelOrderNo || '-'} {d.fuelOrderDate ? `(${d.fuelOrderDate.slice(5).replace('-','/')})` : ''}</span>
+                      <span className="text-on-surface">{d.fuelOrderNo || '-'} {d.fuelOrderDate ? `(${d.fuelOrderDate.slice(5).replace('-','/')})` : ''}</span>
                     ) : (
                       <span className="text-on-surface-variant">-</span>
                     )}
                   </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono text-sm font-semibold">{d.consumed.toFixed(1)}</td>
-                  <td className={`py-1.5 px-2 text-right font-mono text-sm font-bold ${idx === ledgerDays.length -1 ? 'text-telemetry-cyan' : d.drawn>0 ? 'text-trip-official' : 'text-on-surface'}`}>
+                ))}
+                <td className="py-2.5 px-3 text-center text-[11px] tracking-widest border border-rule-line-strong bg-surface-container-low">Total Inflow</td>
+              </tr>
+              <tr className="bg-paper-sheet">
+                <td className="py-2.5 px-3 font-semibold border border-rule-line-strong sticky left-0 bg-paper-sheet z-10">Consumed (L)</td>
+                {ledgerDays.map((d) => (
+                  <td key={d.date} className="py-2.5 px-3 text-right font-mono text-sm font-semibold border border-rule-line">{d.consumed.toFixed(1)}</td>
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm font-bold text-error border border-rule-line-strong bg-surface-container-low">{summary.totalConsumed.toFixed(1)}</td>
+              </tr>
+              <tr className="bg-surface-container-high font-bold">
+                <td className="py-2.5 px-3 border border-rule-line-strong sticky left-0 bg-surface-container-high z-10">Closing Balance</td>
+                {ledgerDays.map((d, idx) => (
+                  <td key={d.date} className={`py-2.5 px-3 text-right font-mono text-sm border border-rule-line-strong ${idx === ledgerDays.length - 1 ? 'text-telemetry-cyan' : d.drawn > 0 ? 'text-trip-official' : 'text-on-surface'}`}>
                     {d.balance.toFixed(1)} L
                   </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-surface-container-high font-bold text-on-surface">
-                <td colSpan={3} className="py-1 px-1.5 text-right text-[10px] font-semibold tracking-widest uppercase text-on-surface-variant">
-                  Page {pageNumber} Totals:
-                </td>
-                <td className="py-1 px-1.5 text-right font-mono text-sm text-trip-official font-bold">{summary.totalDrawn.toFixed(1)} L</td>
-                <td className="py-1 px-2 text-[10px] font-semibold tracking-widest uppercase text-on-surface-variant">Total Inflow</td>
-                <td className="py-1 px-1.5 text-right font-mono text-sm text-error font-bold">{summary.totalConsumed.toFixed(1)} L</td>
-                <td className="py-1 px-2 text-right font-mono text-sm text-primary font-bold">{summary.finalBalance.toFixed(1)} L</td>
+                ))}
+                <td className="py-2.5 px-3 text-right font-mono text-sm text-primary font-bold border border-rule-line-strong bg-surface-container-high">{summary.finalBalance.toFixed(1)} L</td>
               </tr>
-            </tfoot>
+            </tbody>
           </table>
         </div>
       </div>
@@ -180,7 +228,7 @@ export function Side2FuelTables({ pageNumber, ledgerDays, summary, vehicleTankCa
         </div>
         <div className="flex items-center justify-between mt-1 text-on-surface-variant text-[10px] font-semibold tracking-widest uppercase">
           <span>Reserve Limit: 10.0 L</span>
-          <span>Formula: Consumed = Distance ÷ Econ</span>
+          <span>Formula: Closing = Position + In-Tank + Drawn − Consumed</span>
           <span>Avail: {(vehicleTankCapacity - summary.finalBalance).toFixed(1)} L</span>
         </div>
       </div>
@@ -203,7 +251,7 @@ export function Side2FuelTables({ pageNumber, ledgerDays, summary, vehicleTankCa
           <div className="flex flex-col">
             <span className="text-[10px] font-semibold tracking-widest uppercase text-on-primary-container">Carried Forward Odometer:</span>
             <span className="font-mono text-lg font-bold text-paper-sheet print:text-black">
-              {ledgerDays[ledgerDays.length - 1]?.endKm.toFixed(1) ?? '-'} <span className="text-[10px] font-semibold tracking-widest text-tertiary-fixed">KM</span>
+              {ledgerDays[ledgerDays.length - 1]?.endKm ?? '-'} <span className="text-[10px] font-semibold tracking-widest text-tertiary-fixed">KM</span>
             </span>
             <span className="text-[11px] text-surface-container-highest print:text-slate-600">Identical to Page {pageNumber + 1} Day 1 Start KM</span>
           </div>

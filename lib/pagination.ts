@@ -42,8 +42,13 @@ export function calculateConsumed(distance: number, economy: number): number {
   return roundToOneDecimal(distance / economy);
 }
 
-export function calculateBalance(previousBalance: number, drawn: number, consumed: number): number {
-  return roundToOneDecimal(previousBalance + drawn - consumed);
+export function calculateBalance(
+  previousBalance: number,
+  drawn: number,
+  consumed: number,
+  inTank: number = 0
+): number {
+  return roundToOneDecimal(previousBalance + inTank + drawn - consumed);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +138,217 @@ export function getNextPageStartFuel(pages: BookPage[], fallbackFuel: number): n
   if (pages.length === 0) return roundToOneDecimal(fallbackFuel);
   const sorted = sortedPages(pages);
   return roundToOneDecimal(sorted[sorted.length - 1].end_fuel_balance);
+}
+
+// ---------------------------------------------------------------------------
+// Chronological renumbering & Book Opening (Phase 2 Issue 02)
+// ---------------------------------------------------------------------------
+
+export interface BookOpening {
+  openingKm: number; // Integer KM
+  openingFuel: number; // 1 decimal
+}
+
+export function getPageEarliestDate(page: BookPage, trips: Trip[]): string {
+  const pageTrips = trips.filter((t) => t.page_id === page.id);
+  if (pageTrips.length === 0) {
+    // Fallback to month prefix as earliest date for empty page
+    return `${page.month}-01`;
+  }
+  let earliest = pageTrips[0].date;
+  for (const t of pageTrips) {
+    if (t.date < earliest) earliest = t.date;
+  }
+  return earliest;
+}
+
+export function getEarliestOverallDate(pages: BookPage[], trips: Trip[]): string | null {
+  if (pages.length === 0) return null;
+  let earliest: string | null = null;
+  for (const p of pages) {
+    const d = getPageEarliestDate(p, trips);
+    if (earliest === null || d < earliest) earliest = d;
+  }
+  return earliest;
+}
+
+export function isBackdatedInsertion(pages: BookPage[], trips: Trip[], newDate: string): boolean {
+  const earliest = getEarliestOverallDate(pages, trips);
+  if (earliest === null) return false;
+  return newDate < earliest;
+}
+
+export function renumberPagesChronologically(
+  pages: BookPage[],
+  trips: Trip[]
+): { pages: BookPage[]; trips: Trip[] } {
+  if (pages.length <= 1) {
+    return { pages: [...pages], trips: [...trips] };
+  }
+  const pagesWithEarliest = pages.map((p) => ({
+    p,
+    earliest: getPageEarliestDate(p, trips),
+  }));
+  pagesWithEarliest.sort((a, b) => {
+    if (a.earliest < b.earliest) return -1;
+    if (a.earliest > b.earliest) return 1;
+    return a.p.page_number - b.p.page_number;
+  });
+
+  const oldIdToNew = new Map<string, { newId: string; newNumber: number }>();
+  const newPages: BookPage[] = pagesWithEarliest.map(({ p }, idx) => {
+    const newNumber = idx + 1;
+    const newId = `page-${newNumber}`;
+    oldIdToNew.set(p.id, { newId, newNumber });
+    return {
+      ...p,
+      page_number: newNumber,
+      id: newId,
+    };
+  });
+
+  const newTrips: Trip[] = trips.map((t) => {
+    const mapping = oldIdToNew.get(t.page_id);
+    if (mapping) {
+      return { ...t, page_id: mapping.newId };
+    }
+    return { ...t };
+  });
+
+  newPages.sort((a, b) => a.page_number - b.page_number);
+  return { pages: newPages, trips: newTrips };
+}
+
+/**
+ * Recalculate fuel balances forward from Book Opening.
+ * Assumes pages are already sorted chronologically by page_number (1..N).
+ * For each page:
+ *   start_km = opening.openingKm for first page else prev end_km
+ *   start_fuel = opening.openingFuel for first page else prev end_fuel
+ *   totalDistance = sum trip_distance (Integer KM) for page
+ *   totalDrawn = sum fuel_pumped_amount for page
+ *   consumed = distance / economy (default 10.5) rounded 1 dec
+ *   end_fuel = start_fuel + totalDrawn - consumed
+ *   end_km = last trip end_km if trips exist else start_km
+ * Dates are never mutated.
+ * Only fuel and odometer continuity are recomputed; pagination grouping (4/13/month) is preserved.
+ */
+export function recalculatePageBalancesFromOpening(params: {
+  pages: BookPage[];
+  trips: Trip[];
+  opening: BookOpening;
+  economy?: number;
+  inTanksByPage?: Record<string, (number | null | undefined)[]>;
+}): BookPage[] {
+  const { trips, opening, economy = 10.5, inTanksByPage } = params;
+  const sorted = [...params.pages].sort((a, b) => a.page_number - b.page_number);
+  if (sorted.length === 0) return [];
+
+  const result: BookPage[] = [];
+  let prevEndKm = roundToIntegerKm(opening.openingKm);
+  let prevEndFuel = roundToOneDecimal(opening.openingFuel);
+
+  for (let i = 0; i < sorted.length; i++) {
+    const page = { ...sorted[i] };
+    // Set start from opening or previous end (continuity)
+    if (i === 0) {
+      page.start_km = roundToIntegerKm(opening.openingKm);
+      page.start_fuel_balance = roundToOneDecimal(opening.openingFuel);
+    } else {
+      page.start_km = roundToIntegerKm(prevEndKm);
+      page.start_fuel_balance = roundToOneDecimal(prevEndFuel);
+    }
+
+    const pageTrips = trips
+      .filter((t) => {
+        // Trips may still reference old ids if not yet renumbered; handle both by matching against original page ids mapping?
+        // In the recalc-after-renumber case, trips already have new page ids.
+        // Fallback: if trips filtered empty, try to find trips that belong to this page via sorted index? But we require caller to pass renumbered trips.
+        return t.page_id === page.id;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date) || a.trip_index - b.trip_index);
+
+    // Alternative fallback: if no trips matched but page was renumbered, try to match by earliest date coincidence.
+    // For now, if no trips matched, we keep end = start.
+
+    let totalDistance = 0;
+    let totalDrawn = 0;
+    let totalInTank = 0;
+    let endKm = page.start_km;
+
+    if (pageTrips.length > 0) {
+      totalDistance = pageTrips.reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0);
+      totalDrawn = roundToOneDecimal(
+        pageTrips.reduce((s, t) => s + roundToOneDecimal(t.fuel_pumped_amount ?? 0), 0)
+      );
+      // Sum In-Tank per distinct date for this page if provided
+      if (inTanksByPage && inTanksByPage[page.id]) {
+        const rawIn = inTanksByPage[page.id];
+        const distinctForPage = getDistinctDates(pageTrips);
+        for (let d = 0; d < distinctForPage.length; d++) {
+          const v = rawIn[d];
+          if (v !== null && v !== undefined && !isNaN(Number(v))) totalInTank += roundToOneDecimal(Number(v));
+        }
+        totalInTank = roundToOneDecimal(totalInTank);
+      }
+      // End KM is last trip's end_km (Integer)
+      // Prefer max end_km; also sort by date/trip_index for last
+      const sortedByOrder = [...pageTrips].sort((a, b) => a.date.localeCompare(b.date) || a.trip_index - b.trip_index);
+      endKm = roundToIntegerKm(sortedByOrder[sortedByOrder.length - 1].end_km);
+    } else {
+      // No trips on page: distance 0, no fuel change
+      totalDistance = 0;
+      totalDrawn = 0;
+      totalInTank = 0;
+      endKm = page.start_km;
+    }
+
+    const consumed = calculateConsumed(totalDistance, economy);
+    const endFuel = calculateBalance(page.start_fuel_balance, totalDrawn, consumed, totalInTank);
+
+    page.end_km = roundToIntegerKm(endKm);
+    page.end_fuel_balance = roundToOneDecimal(endFuel);
+
+    prevEndKm = page.end_km;
+    prevEndFuel = page.end_fuel_balance;
+
+    result.push(page);
+  }
+
+  return result.sort((a, b) => a.page_number - b.page_number);
+}
+
+/**
+ * Validate pagination constraints still hold after renumber.
+ * Returns list of violations if any page exceeds 4 distinct days, 13 trips per day, or month split.
+ */
+export function validatePaginationConstraints(pages: BookPage[], trips: Trip[]): Array<{ pageId: string; pageNumber: number; violation: string }> {
+  const violations: Array<{ pageId: string; pageNumber: number; violation: string }> = [];
+  for (const page of pages) {
+    const pageTrips = trips.filter((t) => t.page_id === page.id);
+    const distinct = getDistinctDates(pageTrips);
+    if (distinct.length > MAX_DAYS_PER_PAGE) {
+      violations.push({ pageId: page.id, pageNumber: page.page_number, violation: `MAX_DAYS exceeded: ${distinct.length} > ${MAX_DAYS_PER_PAGE}` });
+    }
+    for (const d of distinct) {
+      const cnt = countTripsForDate(pageTrips, d);
+      if (cnt > MAX_TRIPS_PER_DAY) {
+        violations.push({ pageId: page.id, pageNumber: page.page_number, violation: `MAX_TRIPS_PER_DAY exceeded on ${d}: ${cnt} > ${MAX_TRIPS_PER_DAY}` });
+      }
+    }
+    // Month rollover check: all trips on page should share same month as page.month, or at least not cross month without new page?
+    // If distinct months >1, it means page spans month boundary which should have forced new page
+    const months = new Set(pageTrips.map((t) => getMonthKey(t.date)));
+    if (months.size > 1) {
+      violations.push({ pageId: page.id, pageNumber: page.page_number, violation: `MONTH_ROLLOVER breach: multiple months ${Array.from(months).join(', ')}` });
+    }
+    if (pageTrips.length > 0 && !months.has(page.month)) {
+      // page month doesn't match trips months (could happen after renumber if month not updated)
+      // Not strictly a violation if month field is stale, but flag for awareness
+      // We skip strict check to avoid false positives after renumber where month field may lag
+    }
+  }
+  return violations;
 }
 
 // ---------------------------------------------------------------------------

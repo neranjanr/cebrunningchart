@@ -7,7 +7,8 @@ import { Side2FuelTables } from './Side2FuelTables';
 import { PageNavigation } from './PageNavigation';
 import { computeLedgerDays, computeLedgerSummary, groupTripsByDateForSide1 } from '@/lib/ledgerCalculations';
 import { getFuelEconomiesForPage, saveFuelEconomiesForPage } from '@/lib/fuelEconomyStore';
-import { roundToOneDecimal } from '@/lib/tripCalculations';
+import { getInTanksForPage, saveInTanksForPage } from '@/lib/inTankStore';
+import { roundToOneDecimal, roundToIntegerKm } from '@/lib/tripCalculations';
 import { ExcelExportButton } from '@/components/ExcelExportButton';
 
 interface Props {
@@ -38,16 +39,20 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
 
   // Fuel economy raw overrides per day for current page
   const [rawEconomies, setRawEconomies] = useState<(number | null)[]>([]);
+  const [rawInTanks, setRawInTanks] = useState<(number | null)[]>([]);
 
-  // Load per-page economies when page changes
+  // Load per-page economies and In-Tank when page changes
   useEffect(() => {
     if (!currentPage) {
       setRawEconomies([]);
+      setRawInTanks([]);
       return;
     }
     const stored = getFuelEconomiesForPage(currentPage.id);
     // Align length to distinct dates count (if stored shorter, pad)
     setRawEconomies(stored);
+    const storedInTank = getInTanksForPage(currentPage.id);
+    setRawInTanks(storedInTank);
   }, [currentPage?.id]);
 
   const handleEconomyChange = (dayIdx: number, value: string) => {
@@ -65,10 +70,24 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
     saveFuelEconomiesForPage(currentPage.id, next);
   };
 
+  const handleInTankChange = (dayIdx: number, value: string) => {
+    if (!currentPage) return;
+    const next = [...rawInTanks];
+    while (next.length <= dayIdx) next.push(null);
+    if (value === '' || value.trim() === '') {
+      next[dayIdx] = null;
+    } else {
+      const n = parseFloat(value);
+      next[dayIdx] = isNaN(n) ? null : roundToOneDecimal(n);
+    }
+    setRawInTanks(next);
+    saveInTanksForPage(currentPage.id, next);
+  };
+
   const ledgerDays = useMemo(() => {
     if (!currentPage) return [];
-    return computeLedgerDays({ page: currentPage, trips, economies: rawEconomies });
-  }, [currentPage, trips, rawEconomies]);
+    return computeLedgerDays({ page: currentPage, trips, economies: rawEconomies, inTanks: rawInTanks });
+  }, [currentPage, trips, rawEconomies, rawInTanks]);
 
   const summary = useMemo(() => computeLedgerSummary(ledgerDays), [ledgerDays]);
 
@@ -79,9 +98,9 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
 
   const grandTotals = useMemo(() => {
     if (dayGroups.length === 0) return { totalDistance: 0, officialKm: 0, privateKm: 0, tripCount: 0 };
-    const totalDistance = roundToOneDecimal(dayGroups.reduce((s, g) => s + g.distance, 0));
-    const officialKm = roundToOneDecimal(dayGroups.reduce((s, g) => s + g.officialKm, 0));
-    const privateKm = roundToOneDecimal(dayGroups.reduce((s, g) => s + g.privateKm, 0));
+    const totalDistance = roundToIntegerKm(dayGroups.reduce((s, g) => s + g.distance, 0));
+    const officialKm = roundToIntegerKm(dayGroups.reduce((s, g) => s + g.officialKm, 0));
+    const privateKm = roundToIntegerKm(dayGroups.reduce((s, g) => s + g.privateKm, 0));
     const tripCount = dayGroups.reduce((s, g) => s + g.trips.length, 0);
     return { totalDistance, officialKm, privateKm, tripCount };
   }, [dayGroups]);
@@ -125,7 +144,7 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
     );
   }
 
-  const vehicleLabel = vehicle ? `${vehicle.brand} ${vehicle.model} ${vehicle.tank_capacity.toFixed(1)} L` : undefined;
+  const vehicleLabel = vehicle ? `${vehicle.brand} ${vehicle.model} ${vehicle.registration_no ? `• ${vehicle.registration_no}` : ''} • ${vehicle.tank_capacity.toFixed(1)} L` : undefined;
 
   return (
     <div className="flex flex-col">
@@ -165,7 +184,9 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
             summary={summary}
             vehicleTankCapacity={vehicle?.tank_capacity ?? 65}
             rawEconomies={rawEconomies}
+            rawInTanks={rawInTanks}
             onEconomyChange={handleEconomyChange}
+            onInTankChange={handleInTankChange}
           />
         </div>
       </div>
