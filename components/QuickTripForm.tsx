@@ -16,8 +16,10 @@ import {
   roundToOneDecimal,
 } from '@/lib/tripCalculations';
 import { getLastEndKm, saveTrip } from '@/lib/tripStore';
+import { useToast } from '@/lib/toastContext';
 
 export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void }) {
+  const { showToast } = useToast();
   const [date, setDate] = useState<string>(getTodayDateString());
   const [dayOfWeek, setDayOfWeek] = useState<string>(getDayOfWeek(getTodayDateString()));
   const [startKm, setStartKm] = useState<string>('');
@@ -234,6 +236,11 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
         fuel_order_no: fuelOrderNo,
       });
       setSuccessMessage('Trip saved successfully!');
+      showToast('Trip Added', 2000);
+      // Redirect to Dashboard after toast visible (~2s)
+      setTimeout(() => {
+        if (typeof window !== 'undefined') window.location.href = '/';
+      }, 2100);
       // Reset end/distance/places for next entry, keep continuity: new start is previous end
       setStartKm(String(roundToIntegerKm(eKm)));
       setIsAutoStartKm(true);

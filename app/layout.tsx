@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/lib/authContext";
 import { GlobalSearchProvider } from "@/lib/globalSearchContext";
+import { ToastProvider } from "@/lib/toastContext";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col bg-paper-gutter text-on-surface">
         <AuthProvider>
           <GlobalSearchProvider>
-            <AppShell>{children}</AppShell>
+            <ToastProvider>
+              <AppShell>{children}</AppShell>
+            </ToastProvider>
           </GlobalSearchProvider>
         </AuthProvider>
       </body>

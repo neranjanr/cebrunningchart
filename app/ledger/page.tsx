@@ -6,6 +6,7 @@ import { getPages } from '@/lib/pageStore';
 import { getTrips } from '@/lib/tripStore';
 import { getVehicleProfile } from '@/lib/vehicleStore';
 import type { BookPage, Trip, Vehicle } from '@/types';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 export default function LedgerPage() {
   const [pages, setPages] = useState<BookPage[]>([]);
@@ -31,5 +32,9 @@ export default function LedgerPage() {
     return <div className="p-8 text-center text-on-surface-variant">Loading ledger...</div>;
   }
 
-  return <BookLedgerView pages={pages} trips={trips} vehicle={vehicle} />;
+  return (
+    <ProtectedRoute>
+      <BookLedgerView pages={pages} trips={trips} vehicle={vehicle} />
+    </ProtectedRoute>
+  );
 }

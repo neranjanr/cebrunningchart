@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { GoogleLoginButton } from './GoogleLoginButton';
 import { GlobalSearchInput } from '@/lib/globalSearchContext';
+import { useAuth } from '@/lib/authContext';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, isSuperAdmin } = useAuth();
 
   const navItems = [
     { label: 'Dashboard & Analytics', href: '/', icon: 'dashboard' },
@@ -15,6 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { label: 'All Trips Master Table', href: '/trips', icon: 'table_chart' },
     { label: 'Quick Trip Data Entry', href: '/trips/new', icon: 'add_circle' },
     { label: 'Vehicle Profile & Settings', href: '/settings/vehicle', icon: 'settings' },
+    ...(isSuperAdmin ? [{ label: 'Access — Allow-list', href: '/settings/access', icon: 'admin' } as const] : []),
   ];
 
   return (
@@ -74,21 +77,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="font-bold text-sm">FleetLedger</span>
           </div>
           <div className="flex items-center gap-2">
+            {user && (
+              <Link
+                href="/help"
+                aria-label="Help"
+                data-testid="header-help-link-mobile"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-on-primary font-bold text-xs"
+              >
+                ?
+              </Link>
+            )}
             <GoogleLoginButton />
           </div>
         </header>
-        {/* Global Search Header — visible on Dashboard and Ledger (Phase 2 #13) */}
-        {(pathname === '/' || pathname?.startsWith('/ledger')) && (
-          <div className="sticky top-0 lg:top-0 z-30 bg-paper-sheet/95 backdrop-blur border-b border-rule-line px-4 md:px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-            <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant whitespace-nowrap hidden sm:inline">
-              Global Search
-            </span>
-            <div className="w-full sm:w-auto flex-1 sm:max-w-md">
-              <GlobalSearchInput />
-            </div>
-            <span className="text-[11px] text-on-surface-variant hidden md:inline">
-              Filters all Trips by Date, Places, Order No, Type, KM
-            </span>
+        {/* Desktop top bar with Global Search + Help link (Landing uses own header, so only after auth shows) */}
+        <div className="hidden lg:flex h-12 bg-paper-sheet border-b border-rule-line items-center justify-between px-6 sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            {(pathname === '/' || pathname?.startsWith('/ledger')) && user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant whitespace-nowrap">Global Search</span>
+                <GlobalSearchInput />
+              </div>
+            ) : (
+              <span className="text-xs text-on-surface-variant">FleetLedger • Audit Running Chart</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {user && (
+              <Link
+                href="/help"
+                aria-label="Help"
+                data-testid="header-help-link"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-surface text-on-primary font-bold text-sm border border-slate-600 hover:bg-primary"
+                title="Help — 8 sections"
+              >
+                ?
+              </Link>
+            )}
+          </div>
+        </div>
+        {/* Mobile Global Search Header — visible on Dashboard and Ledger when authenticated */}
+        {(pathname === '/' || pathname?.startsWith('/ledger')) && user && (
+          <div className="lg:hidden sticky top-16 z-30 bg-paper-sheet/95 backdrop-blur border-b border-rule-line px-4 py-2.5">
+            <GlobalSearchInput />
           </div>
         )}
 

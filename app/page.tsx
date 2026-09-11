@@ -12,6 +12,7 @@ import { MonthlyBreakdownChart } from '@/components/dashboard/MonthlyBreakdownCh
 import { PageWiseChart } from '@/components/dashboard/PageWiseChart';
 import { AllTripsMasterTable } from '@/components/dashboard/AllTripsMasterTable';
 import { ExcelExportButton } from '@/components/ExcelExportButton';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 export default function DashboardPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -44,23 +45,24 @@ export default function DashboardPage() {
   const hasData = trips.length > 0 || pages.length > 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-on-surface">Dashboard & Analytics</h1>
-          <p className="text-sm text-on-surface-variant">Summary metrics, monthly breakdown, page-wise visualization, and master trip ledger.</p>
+    <ProtectedRoute>
+      <div className="flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-on-surface">Dashboard & Analytics</h1>
+            <p className="text-sm text-on-surface-variant">Summary metrics, monthly breakdown, page-wise visualization, and master trip ledger.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <ExcelExportButton pages={pages} trips={trips} vehicle={vehicle} variant="secondary" />
+            <Link href="/trips/new" className="px-4 py-2 bg-slate-surface text-on-primary rounded-lg text-sm font-semibold hover:bg-primary transition-colors">
+              + New Trip
+            </Link>
+            <Link href="/ledger" className="px-4 py-2 bg-paper-sheet border border-rule-line text-on-surface rounded-lg text-sm font-semibold hover:bg-paper-gutter transition-colors">
+              Open Ledger
+            </Link>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <ExcelExportButton pages={pages} trips={trips} vehicle={vehicle} variant="secondary" />
-          <Link href="/trips/new" className="px-4 py-2 bg-slate-surface text-on-primary rounded-lg text-sm font-semibold hover:bg-primary transition-colors">
-            + New Trip
-          </Link>
-          <Link href="/ledger" className="px-4 py-2 bg-paper-sheet border border-rule-line text-on-surface rounded-lg text-sm font-semibold hover:bg-paper-gutter transition-colors">
-            Open Ledger
-          </Link>
-        </div>
-      </div>
 
       {/* Metric cards */}
       <MetricCards metrics={metrics} />
@@ -97,6 +99,7 @@ export default function DashboardPage() {
           <AllTripsMasterTable trips={trips} pages={pages} />
         </>
       )}
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }
