@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { AppShell } from './AppShell';
+import { AuthProvider } from '@/lib/authContext';
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({
@@ -10,9 +11,11 @@ vi.mock('next/navigation', () => ({
 describe('AppShell Component', () => {
   it('renders navigation links and title correctly', () => {
     render(
-      <AppShell>
-        <div>Test Content</div>
-      </AppShell>
+      <AuthProvider>
+        <AppShell>
+          <div>Test Content</div>
+        </AppShell>
+      </AuthProvider>
     );
 
     expect(screen.getAllByText('FleetLedger').length).toBeGreaterThan(0);

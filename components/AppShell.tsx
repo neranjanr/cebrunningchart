@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { GoogleLoginButton } from './GoogleLoginButton';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -54,8 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
         </div>
-        <div className="p-4 bg-primary-container text-xs text-on-primary-container border-t border-slate-700">
-          <div className="flex items-center justify-between">
+        <div className="p-4 bg-primary-container text-xs text-on-primary-container border-t border-slate-700 flex flex-col gap-3">
+          <GoogleLoginButton />
+          <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
             <span className="uppercase tracking-wider font-semibold text-tertiary-fixed">SEC-24 Registered</span>
             <span className="text-[10px]">v0.1.0</span>
           </div>
@@ -71,9 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="font-bold text-sm">FleetLedger</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/settings/vehicle" className="px-3 py-1 bg-primary text-on-primary rounded text-xs">
-              Vehicle
-            </Link>
+            <GoogleLoginButton />
           </div>
         </header>
 
