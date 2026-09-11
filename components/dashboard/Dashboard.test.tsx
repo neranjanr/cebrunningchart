@@ -43,7 +43,7 @@ function makePage(overrides: Partial<BookPage>): BookPage {
 }
 
 describe('Dashboard components', () => {
-  it('MetricCards displays Official, Private, Total KM and fuel level', () => {
+  it('MetricCards displays Official, Private, Total KM as integers and fuel level 1 decimal (This Month)', () => {
     render(
       <MetricCards
         metrics={{
@@ -57,9 +57,13 @@ describe('Dashboard components', () => {
         }}
       />
     );
-    expect(screen.getByTestId('metric-official')).toHaveTextContent('120.5 KM');
-    expect(screen.getByTestId('metric-private')).toHaveTextContent('30.2 KM');
-    expect(screen.getByTestId('metric-total')).toHaveTextContent('150.7 KM');
+    // Integer KM rounding: 120.5->121, 30.2->30, 150.7->151
+    expect(screen.getByTestId('metric-official')).toHaveTextContent('121 KM');
+    expect(screen.getByTestId('metric-private')).toHaveTextContent('30 KM');
+    expect(screen.getByTestId('metric-total')).toHaveTextContent('151 KM');
+    expect(screen.getByTestId('metric-official')).toHaveTextContent('Official Distance (This Month)');
+    expect(screen.getByTestId('metric-private')).toHaveTextContent('Private Mileage (This Month)');
+    expect(screen.getByTestId('metric-total')).toHaveTextContent('Total (This Month)');
     expect(screen.getByTestId('metric-fuel')).toHaveTextContent('48.3 L');
     expect(screen.getByTestId('metric-fuel')).toHaveTextContent('60.4%');
   });
@@ -129,5 +133,102 @@ describe('Dashboard components', () => {
     const rows = screen.getAllByTestId(/^trip-row-/);
     // After sorting asc by distance, order should be t1 (10), t2 (15), t3 (30)
     expect(rows[0].getAttribute('data-testid')).toBe('trip-row-t1');
+  });
+
+  it('AllTripsMasterTable shows filtered footer with summed integer KM', () => {
+    const trips: Trip[] = [
+      makeTrip({ id: 't1', date: '2024-10-21', trip_type: 'Official', trip_distance: 10 }),
+      makeTrip({ id: 't2', date: '2024-10-22', trip_type: 'Private', trip_distance: 15 }),
+      makeTrip({ id: 't3', date: '2024-11-01', trip_type: 'Official', trip_distance: 30 }),
+    ];
+    const pages: BookPage[] = [makePage({ page_number: 1, id: 'page-1', month: '2024-10' })];
+    render(<AllTripsMasterTable trips={trips} pages={pages} />);
+    // Default: all 3, sums 40 official (10+30), 15 private, 55 total
+    expect(screen.getByTestId('master-footer-distances')).toHaveTextContent('Official 40 KM');
+    expect(screen.getByTestId('master-footer-distances')).toHaveTextContent('Private 15 KM');
+    expect(screen.getByTestId('master-footer-distances')).toHaveTextContent('Total 55 KM');
+    expect(screen.getByTestId('master-footer-count')).toHaveTextContent('3 rows');
+
+    // Filter to Private only -> sums should update
+    fireEvent.change(screen.getByLabelText('Filter by trip type'), { target: { value: 'Private' } });
+    expect(screen.getByTestId('master-footer-distances')).toHaveTextContent('Official 0 KM');
+    expect(screen.getByTestId('master-footer-distances')).toHaveTextContent('Private 15 KM');
+    expect(screen.getByTestId('master-footer-distances')).toHaveTextContent('Total 15 KM');
+  });
+
+  it('AllTripsMasterTable Integer KM monospace display', () => {
+    const trips: Trip[] = [
+      makeTrip({ id: 't1', date: '2024-10-21', start_km: 100.6, end_km: 110.4, trip_distance: 10.2 }),
+    ];
+    const pages: BookPage[] = [makePage({ page_number: 1, id: 'page-1' })];
+    render(<AllTripsMasterTable trips={trips} pages={pages} />);
+    const row = screen.getByTestId('trip-row-t1');
+    // Integer rounding: 100.6->101, 110.4->110, 10.2->10
+    expect(row).toHaveTextContent('101');
+    expect(row).toHaveTextContent('110');
+    // Distance bold integer
+    expect(row.textContent).toMatch(/\b10\b/);
+  });
+
+  it('MonthlyBreakdownChart shows last 12 by default with More button and modal', async () => {
+    const data = Array.from({ length: 15 }, (_, i) => ({
+      monthKey: `2024-${String(i + 1).padStart(2, '0')}`,
+      monthLabel: `M${i + 1} 2024`,
+      officialKm: 10,
+      privateKm: 5,
+      totalKm: 15,
+      tripCount: 2,
+      fuelDrawn: 0,
+      pageCount: 1,
+    }));
+    render(<MonthlyBreakdownChart data={data} />);
+    // Should show only last 12 rows (months 04-15)
+    expect(screen.getByTestId('monthly-row-2024-04')).toBeInTheDocument();
+    expect(screen.queryByTestId('monthly-row-2024-01')).not.toBeInTheDocument();
+    expect(screen.getByTestId('more-monthly-button')).toBeInTheDocument();
+    expect(screen.getByTestId('more-monthly-button')).toHaveTextContent('15 months');
+
+    fireEvent.click(screen.getByTestId('more-monthly-button'));
+    expect(screen.getByTestId('monthly-more-modal')).toBeInTheDocument();
+    // Modal should contain all 15 rows
+    expect(screen.getByTestId('monthly-modal-row-2024-01')).toBeInTheDocument();
+    expect(screen.getByTestId('monthly-modal-row-2024-15')).toBeInTheDocument();
+    // Close modal
+    fireEvent.click(screen.getByTestId('monthly-modal-close'));
+    expect(screen.queryByTestId('monthly-more-modal')).not.toBeInTheDocument();
+  });
+
+  it('PageWiseChart shows last 12 by default with More button and modal', () => {
+    const data = Array.from({ length: 20 }, (_, i) => ({
+      pageNumber: i + 1,
+      month: '2024-10',
+      monthLabel: 'Oct 2024',
+      distance: 10,
+      officialKm: 8,
+      privateKm: 2,
+      tripCount: 1,
+    }));
+    render(<PageWiseChart data={data} />);
+    // Last 12: pages 9-20
+    expect(screen.getByTestId('page-bar-9')).toBeInTheDocument();
+    expect(screen.queryByTestId('page-bar-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('more-pagewise-button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('more-pagewise-button'));
+    expect(screen.getByTestId('pagewise-more-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('pagewise-modal-row-1')).toBeInTheDocument();
+    expect(screen.getByTestId('pagewise-modal-row-20')).toBeInTheDocument();
+  });
+
+  it('MonthlyBreakdownChart integers monospace table when <=12 shows no More button', () => {
+    render(
+      <MonthlyBreakdownChart
+        data={[
+          { monthKey: '2024-10', monthLabel: 'Oct 2024', officialKm: 100, privateKm: 20, totalKm: 120, tripCount: 4, fuelDrawn: 35, pageCount: 2 },
+        ]}
+      />
+    );
+    expect(screen.queryByTestId('more-monthly-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('monthly-more-modal')).not.toBeInTheDocument();
   });
 });

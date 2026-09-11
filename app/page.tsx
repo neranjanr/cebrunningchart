@@ -6,7 +6,7 @@ import type { BookPage, Trip, Vehicle } from '@/types';
 import { getVehicleProfile } from '@/lib/vehicleStore';
 import { getPages } from '@/lib/pageStore';
 import { getTrips } from '@/lib/tripStore';
-import { computeDashboardMetrics, computeMonthlyBreakdown, computePageWiseDistances } from '@/lib/dashboardCalculations';
+import { computeThisMonthMetrics, computeMonthlyBreakdown, computePageWiseDistances } from '@/lib/dashboardCalculations';
 import { MetricCards } from '@/components/dashboard/MetricCards';
 import { MonthlyBreakdownChart } from '@/components/dashboard/MonthlyBreakdownChart';
 import { PageWiseChart } from '@/components/dashboard/PageWiseChart';
@@ -33,7 +33,7 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const metrics = useMemo(() => computeDashboardMetrics({ trips, vehicle, pages }), [trips, vehicle, pages]);
+  const metrics = useMemo(() => computeThisMonthMetrics({ trips, vehicle, pages }), [trips, vehicle, pages]);
   const monthly = useMemo(() => computeMonthlyBreakdown({ trips, pages }), [trips, pages]);
   const pageWise = useMemo(() => computePageWiseDistances({ trips, pages }), [trips, pages]);
 
@@ -73,7 +73,7 @@ export default function DashboardPage() {
           </span>
           <span className="text-on-surface-variant">{vehicle.vehicle_type} • {vehicle.fuel_type}</span>
           <span className="ml-auto font-mono text-on-surface-variant">
-            Odo: <span className="font-bold text-on-surface">{vehicle.current_odometer.toFixed(1)} KM</span> • Tank: <span className="font-bold text-on-surface">{vehicle.tank_capacity.toFixed(1)} L</span>
+            Odo: <span className="font-bold text-on-surface">{Math.round(vehicle.current_odometer)} KM</span> • Tank: <span className="font-bold text-on-surface">{vehicle.tank_capacity.toFixed(1)} L</span>
           </span>
         </div>
       )}

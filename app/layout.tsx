@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/lib/authContext";
+import { GlobalSearchProvider } from "@/lib/globalSearchContext";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="min-h-full flex flex-col bg-paper-gutter text-on-surface">
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <GlobalSearchProvider>
+            <AppShell>{children}</AppShell>
+          </GlobalSearchProvider>
         </AuthProvider>
       </body>
     </html>

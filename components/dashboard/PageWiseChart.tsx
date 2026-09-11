@@ -1,13 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { PageDistance } from '@/lib/dashboardCalculations';
+import { getLast12PageDistances } from '@/lib/dashboardCalculations';
 
 interface Props {
   data: PageDistance[];
 }
 
 export function PageWiseChart({ data }: Props) {
+  const [showAll, setShowAll] = useState(false);
+
   if (data.length === 0) {
     return (
       <div className="bg-paper-sheet rounded-xl border border-rule-line p-6 text-center">
@@ -16,26 +19,30 @@ export function PageWiseChart({ data }: Props) {
     );
   }
 
-  const maxDistance = Math.max(...data.map((d) => d.distance), 1);
+  const displayed = data.length > 12 ? getLast12PageDistances(data) : data;
+  const maxDistance = Math.max(...displayed.map((d) => d.distance), 1);
+  const hasMore = data.length > 12;
 
   return (
     <div className="bg-paper-sheet rounded-xl border border-rule-line shadow-sm p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold tracking-tight text-on-surface">Page-wise Distance Visualization</h3>
-        <span className="text-[10px] font-semibold tracking-widest uppercase text-on-surface-variant">{data.length} pages</span>
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-on-surface-variant">
+          {hasMore ? `Last 12 of ${data.length}` : `${data.length} pages`}
+        </span>
       </div>
 
       <div className="flex items-end gap-1.5 h-40 px-1 overflow-x-auto">
-        {data.map((p) => {
+        {displayed.map((p) => {
           const heightPct = (p.distance / maxDistance) * 100;
           return (
             <div key={p.pageNumber} data-testid={`page-bar-${p.pageNumber}`} className="flex flex-col items-center gap-1 min-w-[40px] flex-1">
-              <span className="text-[10px] font-mono font-bold text-on-surface">{p.distance.toFixed(1)}</span>
+              <span className="text-[10px] font-mono font-bold text-on-surface">{Math.round(p.distance)}</span>
               <div className="w-full flex flex-col justify-end items-center gap-0" style={{ height: '100px' }}>
                 <div
                   className="w-full rounded-t bg-slate-surface flex flex-col overflow-hidden"
                   style={{ height: `${Math.max(6, heightPct)}%` }}
-                  title={`Page ${p.pageNumber} • ${p.monthLabel} • Total ${p.distance.toFixed(1)} KM (Off ${p.officialKm.toFixed(1)} / Priv ${p.privateKm.toFixed(1)}) • ${p.tripCount} trips`}
+                  title={`Page ${p.pageNumber} • ${p.monthLabel} • Total ${Math.round(p.distance)} KM (Off ${Math.round(p.officialKm)} / Priv ${Math.round(p.privateKm)}) • ${p.tripCount} trips`}
                 >
                   {p.privateKm > 0 && p.distance > 0 && (
                     <div className="w-full bg-trip-private" style={{ height: `${(p.privateKm / p.distance) * 100}%` }} />
@@ -59,32 +66,96 @@ export function PageWiseChart({ data }: Props) {
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-surface inline-block" /> Total stacked</span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="bg-paper-gutter text-on-surface-variant text-[10px] font-semibold tracking-widest uppercase">
-              <th className="py-1.5 px-2 rounded-l">Page</th>
-              <th className="py-1.5 px-2">Month</th>
-              <th className="py-1.5 px-2 text-right">Distance</th>
-              <th className="py-1.5 px-2 text-right">Official</th>
-              <th className="py-1.5 px-2 text-right">Private</th>
-              <th className="py-1.5 px-2 text-right rounded-r">Trips</th>
+      {hasMore && (
+        <button
+          data-testid="more-pagewise-button"
+          onClick={() => setShowAll(true)}
+          className="self-center px-4 py-1.5 border border-rule-line rounded-lg text-xs font-semibold hover:bg-paper-gutter"
+        >
+          More ({data.length} pages)
+        </button>
+      )}
+
+      <div className="overflow-x-auto border border-rule-line rounded-lg">
+        <table className="w-full text-left text-[13px]">
+          <thead className="sticky top-0">
+            <tr className="bg-paper-gutter text-on-surface-variant text-[11px] font-bold tracking-widest uppercase border-b border-rule-line-strong">
+              <th className="py-2 px-3 whitespace-nowrap border-r border-rule-line">Page</th>
+              <th className="py-2 px-3 whitespace-nowrap border-r border-rule-line">Month</th>
+              <th className="py-2 px-3 text-right whitespace-nowrap border-r border-rule-line">Distance</th>
+              <th className="py-2 px-3 text-right whitespace-nowrap border-r border-rule-line">Official</th>
+              <th className="py-2 px-3 text-right whitespace-nowrap border-r border-rule-line">Private</th>
+              <th className="py-2 px-3 text-right whitespace-nowrap">Trips</th>
             </tr>
           </thead>
-          <tbody className="font-mono text-on-surface">
-            {data.map((p) => (
-              <tr key={`tbl-p-${p.pageNumber}`} className="border-t border-rule-line hover:bg-paper-ledger">
-                <td className="py-1.5 px-2 font-bold">P{p.pageNumber}</td>
-                <td className="py-1.5 px-2">{p.monthLabel}</td>
-                <td className="py-1.5 px-2 text-right font-bold">{p.distance.toFixed(1)}</td>
-                <td className="py-1.5 px-2 text-right text-trip-official">{p.officialKm.toFixed(1)}</td>
-                <td className="py-1.5 px-2 text-right text-trip-private">{p.privateKm.toFixed(1)}</td>
-                <td className="py-1.5 px-2 text-right">{p.tripCount}</td>
+          <tbody className="font-mono text-on-surface divide-y divide-rule-line">
+            {displayed.map((p) => (
+              <tr key={`tbl-p-${p.pageNumber}`} className="hover:bg-paper-ledger">
+                <td className="py-2 px-3 font-bold border-r border-rule-line">P{p.pageNumber}</td>
+                <td className="py-2 px-3 border-r border-rule-line">{p.monthLabel}</td>
+                <td className="py-2 px-3 text-right font-bold border-r border-rule-line">{Math.round(p.distance)}</td>
+                <td className="py-2 px-3 text-right text-trip-official border-r border-rule-line">{Math.round(p.officialKm)}</td>
+                <td className="py-2 px-3 text-right text-trip-private border-r border-rule-line">{Math.round(p.privateKm)}</td>
+                <td className="py-2 px-3 text-right">{p.tripCount}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {showAll && (
+        <div
+          data-testid="pagewise-more-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowAll(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="All pages breakdown"
+        >
+          <div
+            className="bg-paper-sheet rounded-xl border border-rule-line shadow-lg w-full max-w-3xl max-h-[70vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-rule-line bg-paper-gutter sticky top-0">
+              <h4 className="text-sm font-bold text-on-surface">All Pages ({data.length})</h4>
+              <button
+                data-testid="pagewise-modal-close"
+                onClick={() => setShowAll(false)}
+                className="px-3 py-1 text-xs font-semibold border border-rule-line rounded-lg hover:bg-paper-sheet"
+                aria-label="Close pagewise modal"
+              >
+                Close
+              </button>
+            </div>
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-left text-[13px]">
+                <thead className="sticky top-0 z-10 bg-paper-gutter">
+                  <tr className="text-on-surface-variant text-[11px] font-bold tracking-widest uppercase border-b border-rule-line-strong">
+                    <th className="py-2 px-3 whitespace-nowrap border-r border-rule-line">Page</th>
+                    <th className="py-2 px-3 whitespace-nowrap border-r border-rule-line">Month</th>
+                    <th className="py-2 px-3 text-right whitespace-nowrap border-r border-rule-line">Distance</th>
+                    <th className="py-2 px-3 text-right whitespace-nowrap border-r border-rule-line">Official</th>
+                    <th className="py-2 px-3 text-right whitespace-nowrap border-r border-rule-line">Private</th>
+                    <th className="py-2 px-3 text-right whitespace-nowrap">Trips</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono text-on-surface divide-y divide-rule-line">
+                  {data.map((p) => (
+                    <tr key={`modal-p-${p.pageNumber}`} data-testid={`pagewise-modal-row-${p.pageNumber}`} className="hover:bg-paper-ledger">
+                      <td className="py-2 px-3 font-bold border-r border-rule-line">P{p.pageNumber}</td>
+                      <td className="py-2 px-3 border-r border-rule-line">{p.monthLabel}</td>
+                      <td className="py-2 px-3 text-right font-bold border-r border-rule-line">{Math.round(p.distance)}</td>
+                      <td className="py-2 px-3 text-right text-trip-official border-r border-rule-line">{Math.round(p.officialKm)}</td>
+                      <td className="py-2 px-3 text-right text-trip-private border-r border-rule-line">{Math.round(p.privateKm)}</td>
+                      <td className="py-2 px-3 text-right">{p.tripCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

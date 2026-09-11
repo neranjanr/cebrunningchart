@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { GoogleLoginButton } from './GoogleLoginButton';
+import { GlobalSearchInput } from '@/lib/globalSearchContext';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -76,6 +77,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <GoogleLoginButton />
           </div>
         </header>
+        {/* Global Search Header — visible on Dashboard and Ledger (Phase 2 #13) */}
+        {(pathname === '/' || pathname?.startsWith('/ledger')) && (
+          <div className="sticky top-0 lg:top-0 z-30 bg-paper-sheet/95 backdrop-blur border-b border-rule-line px-4 md:px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant whitespace-nowrap hidden sm:inline">
+              Global Search
+            </span>
+            <div className="w-full sm:w-auto flex-1 sm:max-w-md">
+              <GlobalSearchInput />
+            </div>
+            <span className="text-[11px] text-on-surface-variant hidden md:inline">
+              Filters all Trips by Date, Places, Order No, Type, KM
+            </span>
+          </div>
+        )}
 
         <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {children}

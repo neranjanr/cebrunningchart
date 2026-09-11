@@ -10,8 +10,8 @@ interface Props {
 export function MetricCards({ metrics }: Props) {
   const cards = [
     {
-      label: 'Official Distance',
-      value: `${metrics.officialKm.toFixed(1)} KM`,
+      label: 'Official Distance (This Month)',
+      value: `${Math.round(metrics.officialKm)} KM`,
       sub: `${metrics.tripCount} trips tracked`,
       accent: 'text-trip-official',
       bg: 'bg-surface-container-highest',
@@ -19,8 +19,8 @@ export function MetricCards({ metrics }: Props) {
       testId: 'metric-official',
     },
     {
-      label: 'Private Distance',
-      value: `${metrics.privateKm.toFixed(1)} KM`,
+      label: 'Private Mileage (This Month)',
+      value: `${Math.round(metrics.privateKm)} KM`,
       sub: 'Personal usage',
       accent: 'text-trip-private',
       bg: 'bg-surface-container',
@@ -28,8 +28,8 @@ export function MetricCards({ metrics }: Props) {
       testId: 'metric-private',
     },
     {
-      label: 'Total Distance',
-      value: `${metrics.totalKm.toFixed(1)} KM`,
+      label: 'Total (This Month)',
+      value: `${Math.round(metrics.totalKm)} KM`,
       sub: 'Ledger-verified odometer span',
       accent: 'text-primary',
       bg: 'bg-slate-surface',

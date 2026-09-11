@@ -1,32 +1,33 @@
 /**
- * Dashboard Analytics - pure functions for Issue 7
+ * Dashboard Analytics - pure functions for Issue 7 + Phase 2 Issue 04
  * Seams:
- * - Summary metric cards (Official, Private, Total KM, estimated fuel level)
- * - Monthly breakdown (Official/Private/Total per YYYY-MM)
- * - Page-wise distance visualization
- * - All Trips Master Table filter/search/sort
+ * - Summary metric cards (Official, Private, Total KM as Integer KM, estimated fuel level 1 decimal)
+ * - Monthly breakdown (Official/Private/Total per YYYY-MM as integers)
+ * - Page-wise distance visualization (integers)
+ * - All Trips Master Table filter/search/sort + Global Search (Phase 2)
+ * - This-Month trio via YYYY-MM prefix, Last-12 slicing
  */
 import type { BookPage, Trip, Vehicle } from '@/types';
-import { roundToOneDecimal } from './tripCalculations';
+import { roundToOneDecimal, roundToIntegerKm, formatDateISO } from './tripCalculations';
 
 export interface DashboardMetrics {
-  officialKm: number;
-  privateKm: number;
-  totalKm: number;
+  officialKm: number; // Integer KM
+  privateKm: number; // Integer KM
+  totalKm: number; // Integer KM
   tripCount: number;
-  fuelLevel: number;
-  tankCapacity: number;
-  fuelLevelPercent: number;
+  fuelLevel: number; // 1 decimal
+  tankCapacity: number; // 1 decimal
+  fuelLevelPercent: number; // 1 decimal
 }
 
 export interface MonthlyBreakdown {
   monthKey: string; // YYYY-MM
   monthLabel: string; // e.g., "Oct 2024"
-  officialKm: number;
-  privateKm: number;
-  totalKm: number;
+  officialKm: number; // Integer KM
+  privateKm: number; // Integer KM
+  totalKm: number; // Integer KM
   tripCount: number;
-  fuelDrawn: number;
+  fuelDrawn: number; // 1 decimal
   pageCount: number;
 }
 
@@ -34,9 +35,9 @@ export interface PageDistance {
   pageNumber: number;
   month: string;
   monthLabel: string;
-  distance: number;
-  officialKm: number;
-  privateKm: number;
+  distance: number; // Integer KM
+  officialKm: number; // Integer KM
+  privateKm: number; // Integer KM
   tripCount: number;
 }
 
@@ -49,6 +50,13 @@ export interface FilterOptions {
   month?: string; // YYYY-MM or 'All'
   sortColumn?: SortColumn;
   sortDirection?: SortDirection;
+}
+
+export interface FilteredSums {
+  count: number;
+  officialKm: number; // Integer KM
+  privateKm: number; // Integer KM
+  totalKm: number; // Integer KM
 }
 
 // ---------------------------------------------------------------------------
@@ -64,13 +72,23 @@ function formatMonthLabel(monthKey: string): string {
 }
 
 function sumDistance(trips: Trip[]): number {
-  return roundToOneDecimal(trips.reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0));
+  return roundToIntegerKm(trips.reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0));
 }
 
+function sumOfficialKm(trips: Trip[]): number {
+  return roundToIntegerKm(
+    trips.filter((t) => t.trip_type === 'Official').reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0)
+  );
+}
 
+function sumPrivateKm(trips: Trip[]): number {
+  return roundToIntegerKm(
+    trips.filter((t) => t.trip_type === 'Private').reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0)
+  );
+}
 
 // ---------------------------------------------------------------------------
-// Summary metric cards
+// Summary metric cards — Integer KM per ADR 0002
 // ---------------------------------------------------------------------------
 
 export function computeDashboardMetrics(params: {
@@ -79,13 +97,9 @@ export function computeDashboardMetrics(params: {
   pages?: BookPage[];
 }): DashboardMetrics {
   const { trips, vehicle, pages } = params;
-  const officialKm = roundToOneDecimal(
-    trips.filter((t) => t.trip_type === 'Official').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
-  );
-  const privateKm = roundToOneDecimal(
-    trips.filter((t) => t.trip_type === 'Private').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
-  );
-  const totalKm = roundToOneDecimal(officialKm + privateKm);
+  const officialKm = sumOfficialKm(trips);
+  const privateKm = sumPrivateKm(trips);
+  const totalKm = roundToIntegerKm(officialKm + privateKm);
   const tripCount = trips.length;
 
   let fuelLevel: number;
@@ -103,13 +117,28 @@ export function computeDashboardMetrics(params: {
   return { officialKm, privateKm, totalKm, tripCount, fuelLevel, tankCapacity, fuelLevelPercent };
 }
 
+export function getCurrentMonthKey(now: Date = new Date()): string {
+  return formatDateISO(now).slice(0, 7); // YYYY-MM
+}
+
 export function computeMetricsForMonth(trips: Trip[], vehicle: Vehicle | null, monthKey: string, pages?: BookPage[]): DashboardMetrics {
   const filtered = trips.filter((t) => t.date.slice(0, 7) === monthKey);
   return computeDashboardMetrics({ trips: filtered, vehicle, pages });
 }
 
+export function computeThisMonthMetrics(params: {
+  trips: Trip[];
+  vehicle: Vehicle | null;
+  pages?: BookPage[];
+  now?: Date;
+}): DashboardMetrics {
+  const { trips, vehicle, pages, now } = params;
+  const monthKey = getCurrentMonthKey(now ?? new Date());
+  return computeMetricsForMonth(trips, vehicle, monthKey, pages);
+}
+
 // ---------------------------------------------------------------------------
-// Monthly breakdown
+// Monthly breakdown — integer KM
 // ---------------------------------------------------------------------------
 
 export function computeMonthlyBreakdown(params: { trips: Trip[]; pages: BookPage[] }): MonthlyBreakdown[] {
@@ -122,13 +151,9 @@ export function computeMonthlyBreakdown(params: { trips: Trip[]; pages: BookPage
   return sortedKeys.map((key) => {
     const monthTrips = trips.filter((t) => t.date.slice(0, 7) === key);
     const monthPages = pages.filter((p) => p.month === key);
-    const officialKm = roundToOneDecimal(
-      monthTrips.filter((t) => t.trip_type === 'Official').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
-    );
-    const privateKm = roundToOneDecimal(
-      monthTrips.filter((t) => t.trip_type === 'Private').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
-    );
-    const totalKm = roundToOneDecimal(officialKm + privateKm);
+    const officialKm = sumOfficialKm(monthTrips);
+    const privateKm = sumPrivateKm(monthTrips);
+    const totalKm = roundToIntegerKm(officialKm + privateKm);
     const fuelDrawn = roundToOneDecimal(monthTrips.reduce((s, t) => s + roundToOneDecimal(t.fuel_pumped_amount ?? 0), 0));
     return {
       monthKey: key,
@@ -144,7 +169,7 @@ export function computeMonthlyBreakdown(params: { trips: Trip[]; pages: BookPage
 }
 
 // ---------------------------------------------------------------------------
-// Page-wise distance
+// Page-wise distance — integer KM
 // ---------------------------------------------------------------------------
 
 export function computePageWiseDistances(params: { trips: Trip[]; pages: BookPage[] }): PageDistance[] {
@@ -153,12 +178,8 @@ export function computePageWiseDistances(params: { trips: Trip[]; pages: BookPag
   return sortedPages.map((page) => {
     const pageTrips = trips.filter((t) => t.page_id === page.id);
     const distance = sumDistance(pageTrips);
-    const officialKm = roundToOneDecimal(
-      pageTrips.filter((t) => t.trip_type === 'Official').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
-    );
-    const privateKm = roundToOneDecimal(
-      pageTrips.filter((t) => t.trip_type === 'Private').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
-    );
+    const officialKm = sumOfficialKm(pageTrips);
+    const privateKm = sumPrivateKm(pageTrips);
     return {
       pageNumber: page.page_number,
       month: page.month,
@@ -172,7 +193,69 @@ export function computePageWiseDistances(params: { trips: Trip[]; pages: BookPag
 }
 
 // ---------------------------------------------------------------------------
-// Master Table filter/search/sort
+// Last-12 slicing helpers
+// ---------------------------------------------------------------------------
+
+export function getLastN<T>(items: T[], n: number): T[] {
+  if (n <= 0) return [];
+  if (items.length <= n) return [...items];
+  return items.slice(-n);
+}
+
+export function getLast12MonthlyBreakdown(breakdown: MonthlyBreakdown[]): MonthlyBreakdown[] {
+  return getLastN(breakdown, 12);
+}
+
+export function getLast12PageDistances(distances: PageDistance[]): PageDistance[] {
+  return getLastN(distances, 12);
+}
+
+// ---------------------------------------------------------------------------
+// Global Search — Phase 2 Issue 04
+// Fields: Date, Places Visited, Fuel Order No, Trip Type, KM substrings (start_km, end_km, trip_distance)
+// Case-insensitive substring for text, numeric substring for KM.
+// Debounce (~200ms) is handled at the UI layer.
+// ---------------------------------------------------------------------------
+
+export function matchesGlobalSearch(trip: Trip, rawQuery: string): boolean {
+  const q = rawQuery.trim().toLowerCase();
+  if (q === '') return true;
+  const dateMatch = trip.date.toLowerCase().includes(q);
+  const placesMatch = trip.places_visited.toLowerCase().includes(q);
+  const orderNoMatch = (trip.fuel_order_no ?? '').toLowerCase().includes(q);
+  const typeMatch = trip.trip_type.toLowerCase().includes(q);
+  const kmMatch =
+    String(trip.start_km).includes(q) ||
+    String(trip.end_km).includes(q) ||
+    String(trip.trip_distance).includes(q);
+  return dateMatch || placesMatch || orderNoMatch || typeMatch || kmMatch;
+}
+
+export function filterTripsByGlobalSearch(trips: Trip[], rawQuery: string): Trip[] {
+  const q = rawQuery.trim();
+  if (q === '') return [...trips];
+  return trips.filter((t) => matchesGlobalSearch(t, q));
+}
+
+export function computeFilteredSums(trips: Trip[]): FilteredSums {
+  const count = trips.length;
+  const officialKm = sumOfficialKm(trips);
+  const privateKm = sumPrivateKm(trips);
+  const totalKm = roundToIntegerKm(officialKm + privateKm);
+  return { count, officialKm, privateKm, totalKm };
+}
+
+export function filterTripsByGlobalSearchWithSums(
+  trips: Trip[],
+  rawQuery: string
+): { filtered: Trip[]; sums: FilteredSums } {
+  const filtered = filterTripsByGlobalSearch(trips, rawQuery);
+  const sums = computeFilteredSums(filtered);
+  return { filtered, sums };
+}
+
+// ---------------------------------------------------------------------------
+// Master Table filter/search/sort — retains full extended search for backward compat
 // ---------------------------------------------------------------------------
 
 export function filterAndSortTrips(trips: Trip[], opts: FilterOptions): Trip[] {
