@@ -1,7 +1,7 @@
 import { BookPage } from '@/types';
 import { supabase, isSupabaseConfigured } from './supabase/client';
 import { getVehicleProfile } from './vehicleStore';
-import { roundToOneDecimal } from './tripCalculations';
+import { roundToOneDecimal, roundToIntegerKm } from './tripCalculations';
 import { getNextPageStartKm, getNextPageStartFuel, getMonthKey } from './pagination';
 
 const LOCAL_STORAGE_KEY = 'fleetledger_book_pages';
@@ -38,10 +38,10 @@ export async function getNextPageStartKmAsync(): Promise<number> {
   const pages = await getPages();
   if (pages.length > 0) {
     const last = [...pages].sort((a, b) => a.page_number - b.page_number)[pages.length - 1];
-    return roundToOneDecimal(last.end_km);
+    return roundToIntegerKm(last.end_km);
   }
   const vehicle = await getVehicleProfile();
-  return roundToOneDecimal(vehicle.current_odometer);
+  return roundToIntegerKm(vehicle.current_odometer);
 }
 
 export async function getNextPageStartFuelAsync(): Promise<number> {
@@ -66,8 +66,8 @@ export async function ensurePageForAssignment(vehicleId: string, newTripDate: st
       vehicle_id: vehicleId,
       page_number: 1,
       month: monthKey,
-      start_km: roundToOneDecimal(vehicle.current_odometer),
-      end_km: roundToOneDecimal(vehicle.current_odometer),
+      start_km: roundToIntegerKm(vehicle.current_odometer),
+      end_km: roundToIntegerKm(vehicle.current_odometer),
       start_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level),
       end_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level),
       created_at: new Date().toISOString(),
@@ -112,7 +112,7 @@ export async function createNextPage(
   const pages = await getPages();
   const nextNumber = currentPage.page_number + 1;
   // Continuity: start values come from previous page's end values
-  const startKm = roundToOneDecimal(currentPage.end_km);
+  const startKm = roundToIntegerKm(currentPage.end_km);
   const startFuel = roundToOneDecimal(currentPage.end_fuel_balance);
   const newPage: BookPage = {
     id: `page-${nextNumber}`,
@@ -134,7 +134,7 @@ export async function updatePageEndValues(pageId: string, endKm: number, endFuel
   const pages = await getPages();
   const page = pages.find((p) => p.id === pageId);
   if (!page) return;
-  page.end_km = roundToOneDecimal(endKm);
+  page.end_km = roundToIntegerKm(endKm);
   page.end_fuel_balance = roundToOneDecimal(endFuel);
   await savePage(page);
 }

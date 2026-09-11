@@ -31,11 +31,11 @@ export interface Trip {
   date: string;
   day_index: number; // 1 to 4
   trip_index: number; // 1 to 13
-  start_time: string;
+  start_time: string; // optional: may be "" when not captured; Estimated Start Time can fill it
   end_time: string;
-  start_km: number;
-  end_km: number;
-  trip_distance: number;
+  start_km: number; // Integer KM
+  end_km: number; // Integer KM
+  trip_distance: number; // Integer KM = round(end - start)
   trip_type: 'Official' | 'Private';
   places_visited: string;
   fuel_pumped_amount?: number;

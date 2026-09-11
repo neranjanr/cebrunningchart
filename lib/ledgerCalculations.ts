@@ -6,7 +6,7 @@
  * - Daily aggregation from trips
  */
 import type { BookPage, Trip } from '@/types';
-import { roundToOneDecimal } from './tripCalculations';
+import { roundToOneDecimal, roundToIntegerKm } from './tripCalculations';
 import { calculateConsumed, calculateBalance, getDistinctDates } from './pagination';
 
 export const DEFAULT_FUEL_ECONOMY = 10.5;
@@ -109,11 +109,11 @@ export function computeLedgerDays(params: {
       .filter((t) => t.date === date)
       .sort((a, b) => a.trip_index - b.trip_index || a.start_km - b.start_km);
 
-    // Determine start/end km from trip sequence (1-decimal)
-    const startKm = roundToOneDecimal(dayTrips[0].start_km);
-    const endKm = roundToOneDecimal(dayTrips[dayTrips.length - 1].end_km);
-    const distance = roundToOneDecimal(
-      dayTrips.reduce((sum, t) => sum + roundToOneDecimal(t.trip_distance), 0)
+    // Determine start/end km from trip sequence (Integer KM)
+    const startKm = roundToIntegerKm(dayTrips[0].start_km);
+    const endKm = roundToIntegerKm(dayTrips[dayTrips.length - 1].end_km);
+    const distance = roundToIntegerKm(
+      dayTrips.reduce((sum, t) => sum + roundToIntegerKm(t.trip_distance), 0)
     );
     // Alternative: end - start; but trips may have gaps? Use sum for robustness. Both should match continuous trips.
     // For validation, use sum; spec example matches sum.
@@ -172,7 +172,7 @@ export function computeLedgerSummary(days: LedgerDay[]): LedgerSummary {
       weightedEconomy: 0,
     };
   }
-  const totalDistance = roundToOneDecimal(days.reduce((s, d) => s + d.distance, 0));
+  const totalDistance = roundToIntegerKm(days.reduce((s, d) => s + d.distance, 0));
   const totalDrawn = roundToOneDecimal(days.reduce((s, d) => s + d.drawn, 0));
   const totalConsumed = roundToOneDecimal(days.reduce((s, d) => s + d.consumed, 0));
   const finalBalance = roundToOneDecimal(days[days.length - 1].balance);
@@ -210,14 +210,14 @@ export function groupTripsByDateForSide1(trips: Trip[], pageId: string): DayGrou
     const dayTrips = forPage
       .filter((t) => t.date === date)
       .sort((a, b) => a.trip_index - b.trip_index);
-    const startKm = roundToOneDecimal(dayTrips[0].start_km);
-    const endKm = roundToOneDecimal(dayTrips[dayTrips.length - 1].end_km);
-    const distance = roundToOneDecimal(dayTrips.reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0));
-    const officialKm = roundToOneDecimal(
-      dayTrips.filter((t) => t.trip_type === 'Official').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
+    const startKm = roundToIntegerKm(dayTrips[0].start_km);
+    const endKm = roundToIntegerKm(dayTrips[dayTrips.length - 1].end_km);
+    const distance = roundToIntegerKm(dayTrips.reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0));
+    const officialKm = roundToIntegerKm(
+      dayTrips.filter((t) => t.trip_type === 'Official').reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0)
     );
-    const privateKm = roundToOneDecimal(
-      dayTrips.filter((t) => t.trip_type === 'Private').reduce((s, t) => s + roundToOneDecimal(t.trip_distance), 0)
+    const privateKm = roundToIntegerKm(
+      dayTrips.filter((t) => t.trip_type === 'Private').reduce((s, t) => s + roundToIntegerKm(t.trip_distance), 0)
     );
     return {
       date,

@@ -4,17 +4,17 @@ import { getVehicleProfile, saveVehicleProfile, DEFAULT_VEHICLE } from './vehicl
 import { assignPageForNewTrip, calculateConsumed, calculateBalance } from './pagination';
 import { getPages, savePage, createNextPage, updatePageEndValues } from './pageStore';
 import { getMonthKey } from './pagination';
-import { roundToOneDecimal } from './tripCalculations';
+import { roundToOneDecimal, roundToIntegerKm } from './tripCalculations';
 
 const LOCAL_STORAGE_KEY = 'fleetledger_trips';
 
 export interface TripInput {
   date: string;
-  start_time: string;
+  start_time: string; // may be "" (optional); Estimated Start Time fills when empty
   end_time: string;
-  start_km: number;
-  end_km: number;
-  trip_distance: number;
+  start_km: number; // Integer KM
+  end_km: number; // Integer KM
+  trip_distance: number; // Integer KM
   trip_type: 'Official' | 'Private';
   places_visited: string;
   fuel_pumped_amount?: number;
@@ -98,7 +98,7 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
   if (pages.length === 0) {
     // Create initial page 1 with vehicle continuity (fuel balance includes pumped minus consumed)
     const defaultEconomy = 10.5;
-    const consumed = calculateConsumed(roundToOneDecimal(input.trip_distance), defaultEconomy);
+    const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
     const initialFuelEnd = calculateBalance(
       roundToOneDecimal(vehicle.current_fuel_level),
       roundToOneDecimal(input.fuel_pumped_amount ?? 0),
@@ -109,8 +109,8 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
       vehicle_id: vehicle.id,
       page_number: 1,
       month: getMonthKey(input.date),
-      start_km: roundToOneDecimal(vehicle.current_odometer),
-      end_km: roundToOneDecimal(input.end_km),
+      start_km: roundToIntegerKm(vehicle.current_odometer),
+      end_km: roundToIntegerKm(input.end_km),
       start_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level),
       end_fuel_balance: initialFuelEnd,
       created_at: new Date().toISOString(),
@@ -135,8 +135,8 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
       const newPage = await createNextPage(current, input.date, vehicle.id);
       // Update end values to reflect this first trip on new page (carry forward fuel with consumption)
       const defaultEconomy = 10.5;
-      const consumed = calculateConsumed(roundToOneDecimal(input.trip_distance), defaultEconomy);
-      newPage.end_km = roundToOneDecimal(input.end_km);
+      const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
+      newPage.end_km = roundToIntegerKm(input.end_km);
       newPage.end_fuel_balance = calculateBalance(
         roundToOneDecimal(newPage.start_fuel_balance),
         roundToOneDecimal(input.fuel_pumped_amount ?? 0),
@@ -154,10 +154,10 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
       dayIndex = assign.dayIndex;
       tripIndex = assign.tripIndex;
       // Update page end values for continuity forward
-      const newEndKm = roundToOneDecimal(input.end_km);
+      const newEndKm = roundToIntegerKm(input.end_km);
       const fuelPumped = roundToOneDecimal(input.fuel_pumped_amount ?? 0);
       const defaultEconomy = 10.5;
-      const consumed = calculateConsumed(roundToOneDecimal(input.trip_distance), defaultEconomy);
+      const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
       const newEndFuel = calculateBalance(roundToOneDecimal(targetPage.end_fuel_balance), fuelPumped, consumed);
       await updatePageEndValues(targetPage.id, newEndKm, newEndFuel);
       targetPage.end_km = newEndKm;
@@ -172,11 +172,11 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
     date: input.date,
     day_index: dayIndex,
     trip_index: tripIndex,
-    start_time: input.start_time,
+    start_time: input.start_time ?? '',
     end_time: input.end_time,
-    start_km: roundToOneDecimal(input.start_km),
-    end_km: roundToOneDecimal(input.end_km),
-    trip_distance: roundToOneDecimal(input.trip_distance),
+    start_km: roundToIntegerKm(input.start_km),
+    end_km: roundToIntegerKm(input.end_km),
+    trip_distance: roundToIntegerKm(input.trip_distance),
     trip_type: input.trip_type,
     places_visited: input.places_visited,
     fuel_pumped_amount: input.fuel_pumped_amount ?? 0,
@@ -188,7 +188,7 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
     try {
       const { data, error } = await supabase.from('trips').insert([newTrip]).select().single();
       if (data && !error) {
-        await saveVehicleProfile({ current_odometer: roundToOneDecimal(input.end_km) });
+        await saveVehicleProfile({ current_odometer: roundToIntegerKm(input.end_km) });
         await saveVehicleProfile({ current_fuel_level: roundToOneDecimal(targetPage!.end_fuel_balance) });
         return data as Trip;
       }
@@ -201,7 +201,7 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
   writeLocalTrips(updated);
 
   try {
-    await saveVehicleProfile({ current_odometer: roundToOneDecimal(input.end_km) });
+    await saveVehicleProfile({ current_odometer: roundToIntegerKm(input.end_km) });
     await saveVehicleProfile({ current_fuel_level: roundToOneDecimal(targetPage!.end_fuel_balance) });
   } catch (e) {
     console.warn('Failed to update vehicle odometer', e);

@@ -100,50 +100,50 @@ describe('computeLedgerDays - sample page 14 data', () => {
 
     expect(days.length).toBe(4);
 
-    // Day 1
+    // Day 1 - Integer KM: 62
     expect(days[0].date).toBe('2024-10-21');
-    expect(days[0].startKm).toBe(142684.2);
-    expect(days[0].endKm).toBe(142746.8);
-    expect(days[0].distance).toBe(62.6);
+    expect(days[0].startKm).toBe(142684);
+    expect(days[0].endKm).toBe(142747);
+    expect(days[0].distance).toBe(62);
     expect(days[0].fuelEconomy).toBe(10.5);
     expect(days[0].fuelPosition).toBe(31.4);
     expect(days[0].drawn).toBe(0.0);
-    expect(days[0].consumed).toBe(6.0); // 62.6/10.5 = 5.96 ->6.0
-    expect(days[0].balance).toBe(25.4); // 31.4-6.0
+    expect(days[0].consumed).toBe(5.9); // 62/10.5 =5.90
+    expect(days[0].balance).toBe(25.5); // 31.4-5.9
 
-    // Day 2 inherits 10.5, pumped 35.0
+    // Day 2 inherits 10.5, pumped 35.0 - Integer KM: 65
     expect(days[1].fuelEconomy).toBe(10.5);
-    expect(days[1].distance).toBe(65.2);
-    expect(days[1].fuelPosition).toBe(25.4);
+    expect(days[1].distance).toBe(65);
+    expect(days[1].fuelPosition).toBe(25.5);
     expect(days[1].drawn).toBe(35.0);
     expect(days[1].fuelOrderNo).toBe('#FO-88912');
-    expect(days[1].consumed).toBe(6.2); // 65.2/10.5=6.209 ->6.2
-    expect(days[1].balance).toBe(54.2); // 25.4+35-6.2
+    expect(days[1].consumed).toBe(6.2); // 65/10.5=6.19 ->6.2
+    expect(days[1].balance).toBe(54.3); // 25.5+35-6.2
 
-    // Day 3 adjusted to 10.8
+    // Day 3 adjusted to 10.8 - Integer KM: 38
     expect(days[2].fuelEconomy).toBe(10.8);
-    expect(days[2].distance).toBe(38.4);
-    expect(days[2].fuelPosition).toBe(54.2);
-    expect(days[2].consumed).toBe(3.6); // 38.4/10.8=3.55 ->3.6
-    expect(days[2].balance).toBe(50.6);
+    expect(days[2].distance).toBe(38);
+    expect(days[2].fuelPosition).toBe(54.3);
+    expect(days[2].consumed).toBe(3.5); // 38/10.8=3.51 ->3.5
+    expect(days[2].balance).toBe(50.8);
 
-    // Day 4 inherits 10.8
+    // Day 4 inherits 10.8 - Integer KM: 25
     expect(days[3].fuelEconomy).toBe(10.8);
-    expect(days[3].distance).toBe(24.6);
-    expect(days[3].fuelPosition).toBe(50.6);
-    expect(days[3].consumed).toBe(2.3); // 24.6/10.8=2.27 ->2.3
-    expect(days[3].balance).toBe(48.3);
+    expect(days[3].distance).toBe(25);
+    expect(days[3].fuelPosition).toBe(50.8);
+    expect(days[3].consumed).toBe(2.3); // 25/10.8=2.31 ->2.3
+    expect(days[3].balance).toBe(48.5);
     expect(days[3].economySource).toBe('inherited');
   });
 
   it('computes ledger summary totals matching sample', () => {
     const days = computeLedgerDays({ page, trips, economies: [10.5, null, 10.8, null] });
     const summary = computeLedgerSummary(days);
-    expect(summary.totalDistance).toBe(190.8);
+    expect(summary.totalDistance).toBe(190);
     expect(summary.totalDrawn).toBe(35.0);
-    expect(summary.totalConsumed).toBe(18.1); // 6.0+6.2+3.6+2.3
-    expect(summary.finalBalance).toBe(48.3);
-    expect(summary.weightedEconomy).toBe(10.5); // 190.8/18.1=10.54 ->10.5
+    expect(summary.totalConsumed).toBe(17.9); // 5.9+6.2+3.5+2.3
+    expect(summary.finalBalance).toBe(48.5);
+    expect(summary.weightedEconomy).toBe(10.6); // 190/17.9=10.61 ->10.6
   });
 
   it('handles empty trips', () => {

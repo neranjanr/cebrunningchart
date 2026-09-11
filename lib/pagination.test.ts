@@ -213,8 +213,8 @@ describe('odometer continuity - End KM Page N = Start KM Page N+1', () => {
 
   it('getNextPageStartKm returns last page end_km or fallback', () => {
     const pages = [makePage({ page_number: 1, end_km: 142875.0 }), makePage({ page_number: 2, end_km: 143000.5 })];
-    expect(getNextPageStartKm(pages, 100)).toBe(143000.5);
-    expect(getNextPageStartKm([], 12500.0)).toBe(12500.0);
+    expect(getNextPageStartKm(pages, 100)).toBe(143001);
+    expect(getNextPageStartKm([], 12500.0)).toBe(12500);
   });
 });
 

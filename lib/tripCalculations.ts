@@ -7,16 +7,40 @@ export function roundToOneDecimal(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+export function roundToIntegerKm(n: number): number {
+  return Math.round(n);
+}
+
 export function calculateTripDistance(startKm: number, endKm: number): number {
-  return roundToOneDecimal(endKm - startKm);
+  return Math.round(endKm - startKm);
 }
 
 export function calculateEndKm(startKm: number, distance: number): number {
-  return roundToOneDecimal(startKm + distance);
+  return Math.round(startKm + distance);
 }
 
 export function calculateStartKm(endKm: number, distance: number): number {
-  return roundToOneDecimal(endKm - distance);
+  return Math.round(endKm - distance);
+}
+
+/**
+ * Estimated Start Time engine (Phase 2):
+ * Suggests Start Time as End Time − (Trip Distance / 20 km/h), ceiled to nearest 5 minutes.
+ * Returns null for zero/negative distance or missing endTime.
+ */
+export function calculateEstimatedMinutes(distanceKm: number): number | null {
+  if (!distanceKm || distanceKm <= 0 || !Number.isFinite(distanceKm)) return null;
+  const rawMinutes = (distanceKm / 20) * 60; // distance * 3
+  const ceiled = Math.ceil(rawMinutes / 5) * 5;
+  if (ceiled <= 0) return null;
+  return ceiled;
+}
+
+export function estimateStartTime(endTime: string, distanceKm: number): string | null {
+  if (!endTime || !endTime.includes(':')) return null;
+  const minutes = calculateEstimatedMinutes(distanceKm);
+  if (minutes === null) return null;
+  return calculateStartTimeFromEndAndDuration(endTime, minutes);
 }
 
 export function formatDateISO(date: Date): string {

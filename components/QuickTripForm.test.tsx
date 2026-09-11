@@ -80,10 +80,22 @@ describe('QuickTripForm', () => {
     render(<QuickTripForm />);
     await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
     const distance = screen.getByLabelText(/Trip Distance/i) as HTMLInputElement;
+    fireEvent.change(distance, { target: { value: '24' } });
+    await waitFor(() => {
+      const endKm = screen.getByLabelText(/End KM/i) as HTMLInputElement;
+      expect(endKm.value).toBe('12524');
+    });
+  });
+
+  it('integer KM: distance 24.3 rounds to int 24 and End KM integer', async () => {
+    render(<QuickTripForm />);
+    await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
+    const distance = screen.getByLabelText(/Trip Distance/i) as HTMLInputElement;
     fireEvent.change(distance, { target: { value: '24.3' } });
     await waitFor(() => {
       const endKm = screen.getByLabelText(/End KM/i) as HTMLInputElement;
-      expect(endKm.value).toBe('12524.3');
+      // 24.3 rounds to 24 via integer KM engine
+      expect(endKm.value).toBe('12524');
     });
   });
 
@@ -167,5 +179,81 @@ describe('QuickTripForm', () => {
         })
       );
     });
+  });
+
+  it('allows saving without Start Time (nullable) - persists empty string', async () => {
+    const { saveTrip } = await import('@/lib/tripStore');
+    render(<QuickTripForm />);
+    await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
+    const places = screen.getByLabelText(/Places Visited/i) as HTMLInputElement;
+    fireEvent.change(places, { target: { value: 'HQ -> Port' } });
+    const endKm = screen.getByLabelText(/End KM/i) as HTMLInputElement;
+    fireEvent.change(endKm, { target: { value: '12540' } });
+    await waitFor(() => expect((screen.getByLabelText(/Trip Distance/i) as HTMLInputElement).value).toBe('40'));
+    // After distance change, start was auto-estimated; clear it to test nullable save
+    const startTime = screen.getByLabelText(/Start Time/i) as HTMLInputElement;
+    fireEvent.change(startTime, { target: { value: '' } });
+    await waitFor(() => expect(startTime.value).toBe(''));
+    const submit = screen.getByRole('button', { name: /Save Trip/i });
+    fireEvent.click(submit);
+    await waitFor(() => {
+      expect(saveTrip).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_time: '',
+          end_time: '09:30',
+          start_km: 12500,
+          end_km: 12540,
+          trip_distance: 40,
+        })
+      );
+    });
+  });
+
+  it('auto-suggests Estimated Start Time when Distance and End Time present and Start Time empty', async () => {
+    render(<QuickTripForm />);
+    await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
+    // Ensure Start Time is empty
+    const startTime = screen.getByLabelText(/Start Time/i) as HTMLInputElement;
+    expect(startTime.value).toBe('');
+    // Enter distance 9 km => 27 min ceiled to 30 => with end 09:30 => start 09:00
+    const distance = screen.getByLabelText(/Trip Distance/i) as HTMLInputElement;
+    fireEvent.change(distance, { target: { value: '9' } });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Start Time/i)).toHaveValue('09:00');
+    });
+  });
+
+  it('Auto button recomputes Estimated Start Time even when Start Time filled', async () => {
+    render(<QuickTripForm />);
+    await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
+    const startTime = screen.getByLabelText(/Start Time/i) as HTMLInputElement;
+    fireEvent.change(startTime, { target: { value: '08:00' } });
+    await waitFor(() => expect(startTime.value).toBe('08:00'));
+    const distance = screen.getByLabelText(/Trip Distance/i) as HTMLInputElement;
+    fireEvent.change(distance, { target: { value: '10' } });
+    // Start already filled, so auto-suggest should NOT clobber
+    await waitFor(() => expect(startTime.value).toBe('08:00'));
+    // Click Auto button should recompute to 09:00 (end 09:30 - 30 min)
+    const autoBtn = screen.getByLabelText(/Auto/i);
+    fireEvent.click(autoBtn);
+    await waitFor(() => expect(startTime.value).toBe('09:00'));
+  });
+
+  it('manual edit to Start Time is not auto-clobbered by distance change when already filled', async () => {
+    render(<QuickTripForm />);
+    await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
+    const startTime = screen.getByLabelText(/Start Time/i) as HTMLInputElement;
+    fireEvent.change(startTime, { target: { value: '07:30' } });
+    await waitFor(() => expect(startTime.value).toBe('07:30'));
+    const distance = screen.getByLabelText(/Trip Distance/i) as HTMLInputElement;
+    fireEvent.change(distance, { target: { value: '9' } });
+    // Should remain 07:30, not auto-estimated
+    await waitFor(() => expect(startTime.value).toBe('07:30'));
+  });
+
+  it('has Auto button in time section', async () => {
+    render(<QuickTripForm />);
+    await waitFor(() => expect((screen.getByLabelText(/Start KM/i) as HTMLInputElement).value).toBe('12500'));
+    expect(screen.getByLabelText(/Auto/i)).toBeInTheDocument();
   });
 });

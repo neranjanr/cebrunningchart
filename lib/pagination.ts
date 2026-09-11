@@ -7,7 +7,7 @@
  * - Cross-page odometer & fuel continuity
  */
 import type { BookPage, Trip } from '@/types';
-import { roundToOneDecimal } from './tripCalculations';
+import { roundToOneDecimal, roundToIntegerKm } from './tripCalculations';
 
 export const MAX_DAYS_PER_PAGE = 4;
 export const MAX_TRIPS_PER_DAY = 13;
@@ -99,9 +99,8 @@ export function validateOdometerContinuity(pages: BookPage[]): ContinuityResult 
   for (let i = 0; i < sorted.length - 1; i++) {
     const cur = sorted[i];
     const next = sorted[i + 1];
-    // compare with 1-decimal rounding tolerance
-    const expected = roundToOneDecimal(cur.end_km);
-    const actual = roundToOneDecimal(next.start_km);
+    const expected = roundToIntegerKm(cur.end_km);
+    const actual = roundToIntegerKm(next.start_km);
     if (expected !== actual) {
       breaks.push({ pageNumber: next.page_number, expected, actual });
     }
@@ -125,9 +124,9 @@ export function validateFuelContinuity(pages: BookPage[]): ContinuityResult {
 }
 
 export function getNextPageStartKm(pages: BookPage[], fallbackOdometer: number): number {
-  if (pages.length === 0) return roundToOneDecimal(fallbackOdometer);
+  if (pages.length === 0) return roundToIntegerKm(fallbackOdometer);
   const sorted = sortedPages(pages);
-  return roundToOneDecimal(sorted[sorted.length - 1].end_km);
+  return roundToIntegerKm(sorted[sorted.length - 1].end_km);
 }
 
 export function getNextPageStartFuel(pages: BookPage[], fallbackFuel: number): number {

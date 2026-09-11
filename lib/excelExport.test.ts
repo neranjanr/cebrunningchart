@@ -149,12 +149,11 @@ describe('generateBookMirrorWorkbook', () => {
       });
     });
     const joined = allValues.join(' | ');
-    // Consumed and balance from ledgerCalculations: Day1 consumed 6.0, balance 25.4; Day4 balance 48.3
-    // 6.0 may appear as numeric 6 with numFmt 0.0, so check either string or numeric
-    const has6 = joined.includes('6.0') || numericValues.includes(6) || numericValues.includes(6.0);
-    expect(has6).toBe(true);
-    expect(joined).toContain('25.4');
-    expect(joined).toContain('48.3');
+    // Consumed and balance from ledgerCalculations with Integer KM: Day1 consumed 5.9, balance 25.5; Day4 balance 48.5
+    const has59 = joined.includes('5.9') || numericValues.includes(5.9);
+    expect(has59).toBe(true);
+    expect(joined).toContain('25.5');
+    expect(joined).toContain('48.5');
     expect(joined).toContain('10.5');
     expect(joined).toContain('10.8');
   });
@@ -169,9 +168,9 @@ describe('generateBookMirrorWorkbook', () => {
       });
     });
     const joined = allValues.join(' | ');
-    expect(joined).toContain('190.8');
+    expect(joined).toContain('190');
     expect(joined).toContain('Continuity');
-    expect(joined).toContain('142875.0');
+    expect(joined).toContain('142875');
   });
 
   it('handles multiple pages with continuity', () => {

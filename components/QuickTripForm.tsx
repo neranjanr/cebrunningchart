@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   calculateTripDistance,
   calculateEndKm,
+  estimateStartTime,
   getDayOfWeek,
   getTodayDateString,
   getCurrentTimeString,
@@ -11,6 +12,7 @@ import {
   calculateStartTimeFromEndAndDuration,
   parseDurationToMinutes,
   formatDurationMinutes,
+  roundToIntegerKm,
   roundToOneDecimal,
 } from '@/lib/tripCalculations';
 import { getLastEndKm, saveTrip } from '@/lib/tripStore';
@@ -46,8 +48,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
     }
     getLastEndKm().then((lastEnd) => {
       if (!mounted) return;
-      const rounded = roundToOneDecimal(lastEnd);
-      // Remove trailing .0 for display consistency but keep value as number string
+      const rounded = roundToIntegerKm(lastEnd);
       setStartKm(String(rounded));
       setIsAutoStartKm(true);
       setLoading(false);
@@ -69,17 +70,38 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
     if (val) setDayOfWeek(getDayOfWeek(val));
   };
 
+  const parseIntKm = (str: string): number => {
+    const n = parseFloat(str);
+    return isNaN(n) ? NaN : Math.round(n);
+  };
+
+  // Helper: auto-suggest Estimated Start Time only when Start Time is empty
+  const maybeAutoEstimate = (nextDistanceStr: string, nextEndTime: string, currentStartTime: string) => {
+    if (currentStartTime !== '') return;
+    const d = parseIntKm(nextDistanceStr);
+    if (isNaN(d) || d <= 0) return;
+    if (!nextEndTime || !nextEndTime.includes(':')) return;
+    const estimated = estimateStartTime(nextEndTime, d);
+    if (estimated) {
+      setStartTime(estimated);
+      const dur = calculateDurationMinutes(estimated, nextEndTime);
+      setDuration(formatDurationMinutes(dur));
+    }
+  };
+
   const handleStartKmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setStartKm(val);
     setIsAutoStartKm(false);
-    const s = parseFloat(val);
+    const s = parseIntKm(val);
     if (isNaN(s)) return;
-    if (endKm !== '' && !isNaN(parseFloat(endKm))) {
-      const d = calculateTripDistance(s, parseFloat(endKm));
-      setDistance(String(d));
-    } else if (distance !== '' && !isNaN(parseFloat(distance))) {
-      const end = calculateEndKm(s, parseFloat(distance));
+    if (endKm !== '' && !isNaN(parseIntKm(endKm))) {
+      const d = calculateTripDistance(s, parseIntKm(endKm));
+      const dStr = String(d);
+      setDistance(dStr);
+      maybeAutoEstimate(dStr, endTime, startTime);
+    } else if (distance !== '' && !isNaN(parseIntKm(distance))) {
+      const end = calculateEndKm(s, parseIntKm(distance));
       setEndKm(String(end));
     }
   };
@@ -87,11 +109,13 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
   const handleEndKmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setEndKm(val);
-    const end = parseFloat(val);
-    const start = parseFloat(startKm);
+    const end = parseIntKm(val);
+    const start = parseIntKm(startKm);
     if (!isNaN(end) && !isNaN(start)) {
       const d = calculateTripDistance(start, end);
-      setDistance(String(d));
+      const dStr = String(d);
+      setDistance(dStr);
+      maybeAutoEstimate(dStr, endTime, startTime);
     } else if (val === '') {
       setDistance('');
     }
@@ -99,15 +123,16 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
 
   const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    // allow integer input; keep raw string but parse int for calc
     setDistance(val);
-    const d = parseFloat(val);
-    const start = parseFloat(startKm);
+    const d = parseIntKm(val);
+    const start = parseIntKm(startKm);
     if (!isNaN(d) && !isNaN(start)) {
       const end = calculateEndKm(start, d);
       setEndKm(String(end));
+      maybeAutoEstimate(String(d), endTime, startTime);
     } else if (val === '') {
-      // keep end as is? clear end?
-      // If distance cleared, don't auto clear end; tests expect end to stay until new distance
+      // don't auto clear end
     }
   };
 
@@ -117,6 +142,9 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
     if (val && endTime) {
       const dur = calculateDurationMinutes(val, endTime);
       setDuration(formatDurationMinutes(dur));
+    } else if (val === '' ) {
+      // if cleared, keep duration as is? Don't auto-clear duration
+      // but clearing startTime does not block save (optional)
     }
   };
 
@@ -131,6 +159,9 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
       const durMin = parseDurationToMinutes(duration);
       const start = calculateStartTimeFromEndAndDuration(val, durMin);
       setStartTime(start);
+    } else {
+      // Auto-estimate when start empty and distance present
+      maybeAutoEstimate(distance, val, startTime);
     }
   };
 
@@ -144,6 +175,27 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
     }
   };
 
+  const handleAutoEstimate = () => {
+    const d = parseIntKm(distance);
+    if (isNaN(d) || d <= 0) {
+      setErrorMessage('Enter Distance and End Time to estimate Start Time.');
+      return;
+    }
+    if (!endTime || !endTime.includes(':')) {
+      setErrorMessage('Enter End Time to estimate Start Time.');
+      return;
+    }
+    const estimated = estimateStartTime(endTime, d);
+    if (!estimated) {
+      setErrorMessage('Cannot estimate Start Time (check Distance and End Time).');
+      return;
+    }
+    setStartTime(estimated);
+    const dur = calculateDurationMinutes(estimated, endTime);
+    setDuration(formatDurationMinutes(dur));
+    setErrorMessage('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
@@ -153,28 +205,29 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
       setErrorMessage('Places visited is required.');
       return;
     }
-    const sKm = parseFloat(startKm);
-    const eKm = parseFloat(endKm);
-    const dist = parseFloat(distance);
+    const sKm = parseIntKm(startKm);
+    const eKm = parseIntKm(endKm);
+    const dist = parseIntKm(distance);
     if (isNaN(sKm) || isNaN(eKm) || isNaN(dist)) {
       setErrorMessage('Please provide valid odometer values.');
       return;
     }
-    if (!date || !startTime || !endTime) {
-      setErrorMessage('Please fill date and time fields.');
+    if (!date || !endTime) {
+      setErrorMessage('Please fill date and End Time fields.');
       return;
     }
+    // startTime is now optional - empty string allowed
 
     setSaving(true);
     try {
       const fuelAmt = fuelPumped ? parseFloat(fuelPumped) : 0;
       await saveTrip({
         date,
-        start_time: startTime,
+        start_time: startTime ?? '',
         end_time: endTime,
-        start_km: roundToOneDecimal(sKm),
-        end_km: roundToOneDecimal(eKm),
-        trip_distance: roundToOneDecimal(dist),
+        start_km: roundToIntegerKm(sKm),
+        end_km: roundToIntegerKm(eKm),
+        trip_distance: roundToIntegerKm(dist),
         trip_type: tripType,
         places_visited: placesVisited,
         fuel_pumped_amount: isNaN(fuelAmt) ? 0 : roundToOneDecimal(fuelAmt),
@@ -182,7 +235,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
       });
       setSuccessMessage('Trip saved successfully!');
       // Reset end/distance/places for next entry, keep continuity: new start is previous end
-      setStartKm(String(roundToOneDecimal(eKm)));
+      setStartKm(String(roundToIntegerKm(eKm)));
       setIsAutoStartKm(true);
       setEndKm('');
       setDistance('');
@@ -286,7 +339,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
 
         {/* Odometer Section */}
         <div className="p-4 bg-paper-ledger dark:bg-zinc-800/50 rounded-xl border border-rule-line dark:border-zinc-700 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Odometer Reciprocal — Start + Distance = End</h3>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Odometer Reciprocal — Start + Distance = End (Integer KM)</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="start-km" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
@@ -296,7 +349,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
                 id="start-km"
                 aria-label="Start KM"
                 type="number"
-                step="0.1"
+                step="1"
                 value={startKm}
                 onChange={handleStartKmChange}
                 required
@@ -319,7 +372,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
                 id="end-km"
                 aria-label="End KM"
                 type="number"
-                step="0.1"
+                step="1"
                 value={endKm}
                 onChange={handleEndKmChange}
                 placeholder="Enter End KM"
@@ -335,7 +388,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
                 id="trip-distance"
                 aria-label="Trip Distance"
                 type="number"
-                step="0.1"
+                step="1"
                 value={distance}
                 onChange={handleDistanceChange}
                 placeholder="Enter Distance"
@@ -344,26 +397,38 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
             </div>
           </div>
           <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
-            Formula: Distance (1-dec) = End − Start • Rounded to 0.1 KM
+            Formula: Distance (int) = round(End − Start) • Integer KM
           </p>
         </div>
 
         {/* Time Section */}
         <div className="p-4 bg-paper-ledger dark:bg-zinc-800/50 rounded-xl border border-rule-line dark:border-zinc-700 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Time Reciprocal — End − Duration = Start</h3>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Time Reciprocal — End − Duration = Start • Estimated Start Time</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="start-time" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Start Time
+                Start Time <span className="text-zinc-400 font-normal text-xs">Optional</span>
               </label>
-              <input
-                id="start-time"
-                aria-label="Start Time"
-                type="time"
-                value={startTime}
-                onChange={handleStartTimeChange}
-                className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-              />
+              <div className="flex gap-2">
+                <input
+                  id="start-time"
+                  aria-label="Start Time"
+                  type="time"
+                  value={startTime}
+                  onChange={handleStartTimeChange}
+                  className="flex-1 px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  aria-label="Auto"
+                  onClick={handleAutoEstimate}
+                  className="px-3 py-2 text-xs font-bold uppercase tracking-wider border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-600 transition-colors"
+                  title="Estimate Start Time as End − (Distance/20 km/h) ceiled to 5 min"
+                >
+                  Auto
+                </button>
+              </div>
+              <span className="mt-1 inline-block text-[10px] text-zinc-500 uppercase tracking-wider">Auto: End − (Distance/20) ceil 5 min • Empty allowed</span>
             </div>
 
             <div>
@@ -399,7 +464,7 @@ export default function QuickTripForm({ onSuccess }: { onSuccess?: () => void })
             </div>
           </div>
           <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
-            Formula: Start = End − Duration • Supports overnight wrap
+            Formula: Estimated Start = End − ceil((Distance/20)*60 /5)*5 • Supports overnight wrap • Only auto-fills when Start empty
           </p>
         </div>
 
