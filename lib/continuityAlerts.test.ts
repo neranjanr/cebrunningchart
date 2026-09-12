@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { detectPageGaps, detectTripGaps } from './continuityAlerts';
+import { detectPageGaps, detectTripGaps, detectDayGroupFuelGaps, type FuelGap } from './continuityAlerts';
 import type { BookPage, Trip } from '@/types';
+import type { LedgerDay } from '@/lib/ledgerCalculations';
 
 describe('continuityAlerts', () => {
   it('detects page-to-page KM (RED) and Fuel (AMBER) gaps', () => {
@@ -26,5 +27,55 @@ describe('continuityAlerts', () => {
     expect(gaps[0].kind).toBe('km');
     expect(gaps[0].expected).toBe(50050);
     expect(gaps[0].actual).toBe(50060);
+  });
+
+  it('no KM gaps when trips are continuous', () => {
+    const trips: Trip[] = [
+      { id: 't1', vehicle_id: 'v1', page_id: 'p1', day_index: 1, trip_index: 1, date: '2026-01-01', start_km: 50000, end_km: 50050, trip_distance: 50, start_time: '08:00', end_time: '09:00', trip_type: 'Official', places_visited: 'A' },
+      { id: 't2', vehicle_id: 'v1', page_id: 'p1', day_index: 1, trip_index: 2, date: '2026-01-01', start_km: 50050, end_km: 50100, trip_distance: 50, start_time: '09:00', end_time: '10:00', trip_type: 'Official', places_visited: 'B' },
+    ] as any;
+
+    const gaps = detectTripGaps(trips);
+    expect(gaps).toHaveLength(0);
+  });
+});
+
+describe('detectDayGroupFuelGaps', () => {
+  it('detects fuel gap between consecutive day groups when closing balance != next position', () => {
+    const days: LedgerDay[] = [
+      { dayIndex: 1, date: '2026-01-01', dayLabel: 'Thu 1 Jan', startKm: 50000, endKm: 50050, distance: 50, fuelEconomy: 10, economySource: 'fallback', fuelPosition: 10, inTank: 0, drawn: 0, fuelOrderNo: '', fuelOrderDate: '', consumed: 5, balance: 5 },
+      { dayIndex: 2, date: '2026-01-02', dayLabel: 'Fri 2 Jan', startKm: 50050, endKm: 50100, distance: 50, fuelEconomy: 10, economySource: 'inherited', fuelPosition: 6, inTank: 0, drawn: 0, fuelOrderNo: '', fuelOrderDate: '', consumed: 5, balance: 1 },
+    ] as any;
+
+    const gaps = detectDayGroupFuelGaps(days);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0].kind).toBe('fuel');
+    expect(gaps[0].expected).toBe(5);
+    expect(gaps[0].actual).toBe(6);
+    expect(gaps[0].date).toBe('2026-01-02');
+  });
+
+  it('no fuel gap when closing balance equals next position', () => {
+    const days: LedgerDay[] = [
+      { dayIndex: 1, date: '2026-01-01', dayLabel: 'Thu 1 Jan', startKm: 50000, endKm: 50050, distance: 50, fuelEconomy: 10, economySource: 'fallback', fuelPosition: 10, inTank: 0, drawn: 0, fuelOrderNo: '', fuelOrderDate: '', consumed: 5, balance: 5 },
+      { dayIndex: 2, date: '2026-01-02', dayLabel: 'Fri 2 Jan', startKm: 50050, endKm: 50100, distance: 50, fuelEconomy: 10, economySource: 'inherited', fuelPosition: 5, inTank: 0, drawn: 0, fuelOrderNo: '', fuelOrderDate: '', consumed: 5, balance: 0 },
+    ] as any;
+
+    const gaps = detectDayGroupFuelGaps(days);
+    expect(gaps).toHaveLength(0);
+  });
+
+  it('returns empty array for single day group', () => {
+    const days: LedgerDay[] = [
+      { dayIndex: 1, date: '2026-01-01', dayLabel: 'Thu 1 Jan', startKm: 50000, endKm: 50050, distance: 50, fuelEconomy: 10, economySource: 'fallback', fuelPosition: 10, inTank: 0, drawn: 0, fuelOrderNo: '', fuelOrderDate: '', consumed: 5, balance: 5 },
+    ] as any;
+
+    const gaps = detectDayGroupFuelGaps(days);
+    expect(gaps).toHaveLength(0);
+  });
+
+  it('returns empty array for empty days', () => {
+    const gaps = detectDayGroupFuelGaps([]);
+    expect(gaps).toHaveLength(0);
   });
 });

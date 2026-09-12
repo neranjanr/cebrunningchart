@@ -3,6 +3,7 @@
   * Pure functions for detecting Page-to-Page and Trip-to-Trip KM (RED) and Fuel (AMBER) gaps.
   */
 import type { BookPage, Trip } from '@/types';
+import type { LedgerDay } from '@/lib/ledgerCalculations';
 import { roundToIntegerKm, roundToOneDecimal } from './tripCalculations';
 
 export interface PageGap {
@@ -76,6 +77,40 @@ export function detectTripGaps(trips: Trip[]): TripGap[] {
         expected: expectedEnd,
         actual: actualStart,
         message: `Trip on ${next.date} Start KM (${actualStart}) does not match previous Trip End KM (${expectedEnd})`,
+      });
+    }
+  }
+
+  return gaps;
+}
+
+export interface FuelGap {
+  kind: 'fuel';
+  date: string;
+  dayIndex: number;
+  expected: number;
+  actual: number;
+  message: string;
+}
+
+export function detectDayGroupFuelGaps(ledgerDays: LedgerDay[]): FuelGap[] {
+  if (ledgerDays.length < 2) return [];
+  const gaps: FuelGap[] = [];
+
+  for (let i = 0; i < ledgerDays.length - 1; i++) {
+    const cur = ledgerDays[i];
+    const next = ledgerDays[i + 1];
+
+    const expectedBalance = roundToOneDecimal(cur.balance);
+    const actualPosition = roundToOneDecimal(next.fuelPosition);
+    if (expectedBalance !== actualPosition) {
+      gaps.push({
+        kind: 'fuel',
+        date: next.date,
+        dayIndex: next.dayIndex,
+        expected: expectedBalance,
+        actual: actualPosition,
+        message: `Day ${next.dayIndex} (${next.date}) Fuel Position (${actualPosition} L) does not match previous Day closing Balance (${expectedBalance} L)`,
       });
     }
   }

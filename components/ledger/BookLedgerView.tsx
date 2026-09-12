@@ -10,6 +10,7 @@ import { getFuelEconomiesForPage, saveFuelEconomiesForPage } from '@/lib/fuelEco
 import { getInTanksForPage, saveInTanksForPage } from '@/lib/inTankStore';
 import { roundToOneDecimal, roundToIntegerKm } from '@/lib/tripCalculations';
 import { ExcelExportButton } from '@/components/ExcelExportButton';
+import { detectPageGaps, detectDayGroupFuelGaps } from '@/lib/continuityAlerts';
 
 interface Props {
   pages: BookPage[];
@@ -107,6 +108,9 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
 
   const pageSeq = useMemo(() => computePageSeq(dayGroups), [dayGroups]);
 
+  const pageGaps = useMemo(() => detectPageGaps(sortedPages), [sortedPages]);
+  const dayGroupFuelGaps = useMemo(() => detectDayGroupFuelGaps(ledgerDays), [ledgerDays]);
+
   const handlePrevPage = () => setCurrentPageNumber((n) => Math.max(1, n - 1));
   const handleNextPage = () => setCurrentPageNumber((n) => Math.min(sortedPages.length, n + 1));
   const handleSelectPage = (num: number) => setCurrentPageNumber(num);
@@ -176,6 +180,8 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
           rawInTanks={rawInTanks}
           onEconomyChange={handleEconomyChange}
           onInTankChange={handleInTankChange}
+          pageGaps={pageGaps}
+          dayGroupFuelGaps={dayGroupFuelGaps}
         />
       </div>
 

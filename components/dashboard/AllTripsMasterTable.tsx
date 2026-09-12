@@ -12,6 +12,7 @@ import {
 } from '@/lib/dashboardCalculations';
 import { computeGlobalSeq } from '@/lib/ledgerCalculations';
 import { useGlobalSearch } from '@/lib/globalSearchContext';
+import { detectTripGaps } from '@/lib/continuityAlerts';
 
 interface Props {
   trips: Trip[];
@@ -40,6 +41,12 @@ export function AllTripsMasterTable({ trips, pages, title = 'All Trips Master Ta
 
   // Global chronological sequence 1..T (independent of page, for cross-Book traceability)
   const globalSeqMap = useMemo(() => computeGlobalSeq(trips), [trips]);
+
+  // Detect trip-level KM gaps
+  const tripKmGaps = useMemo(() => detectTripGaps(trips), [trips]);
+
+  // Set of trip IDs with KM gaps (the trip whose Start KM doesn't match previous End KM)
+  const tripKmGapIds = useMemo(() => new Set(tripKmGaps.filter((g) => g.kind === 'km').map((g) => g.tripId)), [tripKmGaps]);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -171,7 +178,9 @@ export function AllTripsMasterTable({ trips, pages, title = 'All Trips Master Ta
                 </td>
               </tr>
             ) : (
-              filtered.map((t) => (
+              filtered.map((t) => {
+                const hasKmGap = tripKmGapIds.has(t.id);
+                return (
                 <tr key={t.id} data-testid={`trip-row-${t.id}`} className="hover:bg-paper-ledger font-medium">
                   <td className="py-2.5 px-3 whitespace-nowrap font-mono text-xs border-r border-rule-line">{t.date}</td>
                   <td className="py-2.5 px-2 text-xs font-semibold text-on-surface-variant border-r border-rule-line">{t.day_index}</td>
@@ -179,7 +188,7 @@ export function AllTripsMasterTable({ trips, pages, title = 'All Trips Master Ta
                   <td className="py-2.5 px-2 whitespace-nowrap font-mono text-xs border-r border-rule-line">
                     {t.start_time}–{t.end_time}
                   </td>
-                  <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-rule-line">{Math.round(t.start_km)}</td>
+                  <td className={`py-2.5 px-2 text-right font-mono text-xs border-r border-rule-line ${hasKmGap ? 'bg-red-100 font-bold' : ''}`} title={hasKmGap ? `KM Gap: previous trip End KM does not match this Start KM` : undefined}>{Math.round(t.start_km)}</td>
                   <td className="py-2.5 px-2 text-right font-mono text-xs border-r border-rule-line">{Math.round(t.end_km)}</td>
                   <td className="py-2.5 px-2 text-right font-mono text-xs font-bold border-r border-rule-line">{Math.round(t.trip_distance)}</td>
                   <td className="py-2.5 px-2 border-r border-rule-line">
@@ -194,7 +203,8 @@ export function AllTripsMasterTable({ trips, pages, title = 'All Trips Master Ta
                   <td className="py-2.5 px-2 text-xs font-mono text-on-surface-variant border-r border-rule-line">{t.fuel_order_no || '-'}</td>
                   <td className="py-2.5 px-2 text-xs font-mono">{t.page_id.replace('page-', 'P')}</td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

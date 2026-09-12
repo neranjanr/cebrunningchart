@@ -52,7 +52,16 @@ export function ContinuityAlertBanner({ pages, trips }: Props) {
               <span className="font-medium text-on-surface">Page {g.pageNumber} ({g.kind.toUpperCase()} Gap):</span>
               <span className="text-on-surface-variant">{g.message}</span>
             </div>
-            <span className="font-mono font-bold text-on-surface">Expected: {g.expected} | Actual: {g.actual}</span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono font-bold text-on-surface">Expected: {g.expected} | Actual: {g.actual}</span>
+              <Link
+                href={`/ledger?page=${g.pageNumber}`}
+                className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-semibold shadow-sm transition-colors"
+                data-testid={`jump-to-page-${g.pageNumber}`}
+              >
+                Jump to Page {g.pageNumber}
+              </Link>
+            </div>
           </div>
         ))}
         {tripGaps.map((g, idx) => (
@@ -62,7 +71,16 @@ export function ContinuityAlertBanner({ pages, trips }: Props) {
               <span className="font-medium text-on-surface">Trip on {g.date} ({g.kind.toUpperCase()} Gap):</span>
               <span className="text-on-surface-variant">{g.message}</span>
             </div>
-            <span className="font-mono font-bold text-on-surface">Expected: {g.expected} | Actual: {g.actual}</span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono font-bold text-on-surface">Expected: {g.expected} | Actual: {g.actual}</span>
+              <Link
+                href="/trips"
+                className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-semibold shadow-sm transition-colors"
+                data-testid="jump-to-trips"
+              >
+                Jump to All Trips
+              </Link>
+            </div>
           </div>
         ))}
       </div>
