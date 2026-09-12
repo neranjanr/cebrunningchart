@@ -1,5 +1,4 @@
 import { Vehicle } from '@/types';
-import { supabase, isSupabaseConfigured } from './supabase/client';
 
 const LOCAL_STORAGE_KEY = 'fleetledger_vehicle_profile';
 
@@ -17,33 +16,37 @@ export const DEFAULT_VEHICLE: Vehicle = {
   updated_at: new Date().toISOString(),
 };
 
+async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...opts?.headers } });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function getVehicleProfile(): Promise<Vehicle> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.from('vehicles').select('*').limit(1).single();
-      if (data && !error) {
-        return data as Vehicle;
-      }
-    } catch (e) {
-      console.warn('Failed to fetch vehicle from Supabase, falling back to local storage', e);
+  try {
+    const res = await apiFetch('/api/vehicles');
+    if (res.ok) {
+      const data = await res.json();
+      if (data) return data as Vehicle;
     }
+  } catch {
+    // Fall through to localStorage
   }
 
-  // Fallback to localStorage
+  // Fallback to localStorage (offline / unauthenticated)
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as Vehicle;
-        // Migration: map legacy current_fuel_level to no-op, ensure registration_no exists
-        if (!parsed.registration_no) {
-          parsed.registration_no = DEFAULT_VEHICLE.registration_no;
-        }
-        // Remove deprecated current_fuel_level from returned profile if present but keep for backward compat writes?
-        // Keep it if existing but don't require it; consumers should use Book Opening.
+        if (!parsed.registration_no) parsed.registration_no = DEFAULT_VEHICLE.registration_no;
         return parsed;
-      } catch (e) {
-        console.error('Error parsing stored vehicle profile', e);
+      } catch {
+        // ignore
       }
     } else {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEFAULT_VEHICLE));
@@ -55,39 +58,16 @@ export async function getVehicleProfile(): Promise<Vehicle> {
 
 export async function saveVehicleProfile(vehicle: Partial<Vehicle>): Promise<Vehicle> {
   const current = await getVehicleProfile();
-  const updated: Vehicle = {
-    ...current,
-    ...vehicle,
-    updated_at: new Date().toISOString(),
-  };
+  const updated: Vehicle = { ...current, ...vehicle, updated_at: new Date().toISOString() };
 
-  if (isSupabaseConfigured && supabase) {
-    try {
-      if (updated.id && updated.id !== 'default-vehicle-1') {
-        const { data, error } = await supabase
-          .from('vehicles')
-          .update(updated)
-          .eq('id', updated.id)
-          .select()
-          .single();
-        if (data && !error) {
-          return data as Vehicle;
-        }
-      } else {
-        // Insert or upsert
-        const { id, ...insertData } = updated;
-        const { data, error } = await supabase
-          .from('vehicles')
-          .insert([insertData])
-          .select()
-          .single();
-        if (data && !error) {
-          return data as Vehicle;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to save vehicle to Supabase, saving to local storage', e);
+  try {
+    const res = await apiFetch('/api/vehicles', { method: 'PUT', body: JSON.stringify(updated) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data) return data as Vehicle;
     }
+  } catch {
+    // Fall through to localStorage
   }
 
   if (typeof window !== 'undefined') {

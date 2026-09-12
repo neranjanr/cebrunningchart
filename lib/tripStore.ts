@@ -1,5 +1,4 @@
 import { Trip, BookPage } from '@/types';
-import { supabase, isSupabaseConfigured } from './supabase/client';
 import { getVehicleProfile, saveVehicleProfile, DEFAULT_VEHICLE } from './vehicleStore';
 import {
   assignPageForNewTrip,
@@ -7,20 +6,20 @@ import {
   calculateBalance,
   getEarliestOverallDate,
   renumberPagesChronologically,
+  getMonthKey,
 } from './pagination';
 import { getPages, savePage, createNextPage, updatePageEndValues } from './pageStore';
-import { getMonthKey } from './pagination';
 import { roundToOneDecimal, roundToIntegerKm } from './tripCalculations';
 
 const LOCAL_STORAGE_KEY = 'fleetledger_trips';
 
 export interface TripInput {
   date: string;
-  start_time: string; // may be "" (optional); Estimated Start Time fills when empty
+  start_time: string;
   end_time: string;
-  start_km: number; // Integer KM
-  end_km: number; // Integer KM
-  trip_distance: number; // Integer KM
+  start_km: number;
+  end_km: number;
+  trip_distance: number;
   trip_type: 'Official' | 'Private';
   places_visited: string;
   fuel_pumped_amount?: number;
@@ -32,11 +31,7 @@ function readLocalTrips(): Trip[] {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
   if (!stored) return [];
-  try {
-    return JSON.parse(stored) as Trip[];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(stored) as Trip[]; } catch { return []; }
 }
 
 function writeLocalTrips(trips: Trip[]): void {
@@ -44,56 +39,42 @@ function writeLocalTrips(trips: Trip[]): void {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(trips));
 }
 
-export async function getTrips(): Promise<Trip[]> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.from('trips').select('*').order('created_at', { ascending: true });
-      if (data && !error) {
-        return data as Trip[];
-      }
-    } catch (e) {
-      console.warn('Failed to fetch trips from Supabase, falling back to local storage', e);
-    }
+async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1000);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...opts?.headers } });
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+export async function getTrips(): Promise<Trip[]> {
+  try {
+    const res = await apiFetch('/api/trips');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) return data as Trip[];
+    }
+  } catch { /* fall through */ }
   return readLocalTrips();
 }
 
 export async function getLastEndKm(): Promise<number> {
   const trips = await getTrips();
-  if (trips.length > 0) {
-    // Last trip by insertion order (or by highest end_km if needed)
-    const last = trips[trips.length - 1];
-    return last.end_km;
-  }
-  // Fallback to vehicle odometer
-  try {
-    const vehicle = await getVehicleProfile();
-    return vehicle.current_odometer;
-  } catch {
-    return DEFAULT_VEHICLE.current_odometer;
-  }
+  if (trips.length > 0) return trips[trips.length - 1].end_km;
+  const vehicle = await getVehicleProfile();
+  return vehicle.current_odometer;
 }
 
 export async function saveTrip(input: TripInput): Promise<Trip> {
   const vehicle = await getVehicleProfile();
-  // Load pages and trips for pagination assignment
   const pages: BookPage[] = await getPages();
-  const tripsLocal = readLocalTrips();
-  // For Supabase fallback, also consider remote trips if configured? Use local snapshot + remote via getTrips()
-  // Use combined view: if Supabase configured, fetch remote, else local
   let allTrips: Trip[];
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const remote = await getTrips();
-      // Merge union of remote and local to avoid losing unsynced trips (deduplicate by id)
-      const seen = new Set(remote.map((t) => t.id));
-      const localOnly = tripsLocal.filter((t) => !seen.has(t.id));
-      allTrips = [...remote, ...localOnly];
-    } catch {
-      allTrips = tripsLocal;
-    }
-  } else {
-    allTrips = tripsLocal;
+  try {
+    allTrips = await getTrips();
+  } catch {
+    allTrips = readLocalTrips();
   }
 
   let targetPage: BookPage | null = null;
@@ -102,7 +83,6 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
   let pageId = '';
 
   if (pages.length === 0) {
-    // Create initial page 1 with vehicle continuity (fuel balance includes pumped minus consumed)
     const defaultEconomy = 10.5;
     const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
     const initialFuelEnd = calculateBalance(
@@ -111,127 +91,87 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
       consumed
     );
     const initialPage: BookPage = {
-      id: `page-1`,
-      vehicle_id: vehicle.id,
-      page_number: 1,
-      month: getMonthKey(input.date),
-      start_km: roundToIntegerKm(vehicle.current_odometer ?? 0),
-      end_km: roundToIntegerKm(input.end_km),
-      start_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level ?? 0),
-      end_fuel_balance: initialFuelEnd,
-      created_at: new Date().toISOString(),
+      id: 'page-1', vehicle_id: vehicle.id, page_number: 1, month: getMonthKey(input.date),
+      start_km: roundToIntegerKm(vehicle.current_odometer ?? 0), end_km: roundToIntegerKm(input.end_km),
+      start_fuel_balance: roundToOneDecimal(vehicle.current_fuel_level ?? 0), end_fuel_balance: initialFuelEnd,
     };
     await savePage(initialPage);
     targetPage = initialPage;
     pageId = initialPage.id;
-    dayIndex = 1;
-    tripIndex = 1;
   } else {
     const assignment = assignPageForNewTrip({ pages, trips: allTrips, newTripDate: input.date });
-
     if ('allowed' in assignment && assignment.allowed === false) {
       throw new Error(`Cannot add trip: ${assignment.reason} limit reached for ${input.date}`);
     }
-
-    const assign = assignment as { pageNumber: number; pageId: string; dayIndex: number; tripIndex: number; requiresNewPage: boolean; reason?: string };
+    const assign = assignment as { pageNumber: number; pageId: string; dayIndex: number; tripIndex: number; requiresNewPage: boolean };
 
     if (assign.requiresNewPage) {
-      // Need to create new page with continuity from last page
       const current = [...pages].sort((a, b) => a.page_number - b.page_number)[pages.length - 1];
       const newPage = await createNextPage(current, input.date, vehicle.id);
-      // Update end values to reflect this first trip on new page (carry forward fuel with consumption)
       const defaultEconomy = 10.5;
       const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
       newPage.end_km = roundToIntegerKm(input.end_km);
-      newPage.end_fuel_balance = calculateBalance(
-        roundToOneDecimal(newPage.start_fuel_balance),
-        roundToOneDecimal(input.fuel_pumped_amount ?? 0),
-        consumed
-      );
+      newPage.end_fuel_balance = calculateBalance(roundToOneDecimal(newPage.start_fuel_balance), roundToOneDecimal(input.fuel_pumped_amount ?? 0), consumed);
       await savePage(newPage);
       targetPage = newPage;
       pageId = newPage.id;
-      dayIndex = 1;
-      tripIndex = 1;
     } else {
-      // Existing page
-      targetPage = pages.find((p) => p.id === assign.pageId) || pages[pages.length - 1];
+      targetPage = pages.find(p => p.id === assign.pageId) || pages[pages.length - 1];
       pageId = targetPage.id;
       dayIndex = assign.dayIndex;
       tripIndex = assign.tripIndex;
-      // Update page end values for continuity forward
       const newEndKm = roundToIntegerKm(input.end_km);
       const fuelPumped = roundToOneDecimal(input.fuel_pumped_amount ?? 0);
       const defaultEconomy = 10.5;
       const consumed = calculateConsumed(roundToIntegerKm(input.trip_distance), defaultEconomy);
       const newEndFuel = calculateBalance(roundToOneDecimal(targetPage.end_fuel_balance), fuelPumped, consumed);
       await updatePageEndValues(targetPage.id, newEndKm, newEndFuel);
-      targetPage.end_km = newEndKm;
-      targetPage.end_fuel_balance = newEndFuel;
     }
   }
 
   const newTrip: Trip = {
     id: `trip-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    page_id: pageId,
-    vehicle_id: vehicle.id,
-    date: input.date,
-    day_index: dayIndex,
-    trip_index: tripIndex,
-    start_time: input.start_time ?? '',
-    end_time: input.end_time,
-    start_km: roundToIntegerKm(input.start_km),
-    end_km: roundToIntegerKm(input.end_km),
-    trip_distance: roundToIntegerKm(input.trip_distance),
-    trip_type: input.trip_type,
+    page_id: pageId, vehicle_id: vehicle.id, date: input.date,
+    day_index: dayIndex, trip_index: tripIndex,
+    start_time: input.start_time ?? '', end_time: input.end_time,
+    start_km: roundToIntegerKm(input.start_km), end_km: roundToIntegerKm(input.end_km),
+    trip_distance: roundToIntegerKm(input.trip_distance), trip_type: input.trip_type,
     places_visited: input.places_visited,
     fuel_pumped_amount: input.fuel_pumped_amount ?? 0,
     fuel_order_no: input.fuel_order_no ?? '',
-    created_at: new Date().toISOString(),
   };
 
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.from('trips').insert([newTrip]).select().single();
-      if (data && !error) {
+  // Try API first
+  try {
+    const res = await apiFetch('/api/trips', { method: 'POST', body: JSON.stringify(newTrip) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data) {
         await saveVehicleProfile({ current_odometer: roundToIntegerKm(input.end_km) });
         await saveVehicleProfile({ current_fuel_level: roundToOneDecimal(targetPage!.end_fuel_balance) });
         return data as Trip;
       }
-    } catch (e) {
-      console.warn('Failed to save trip to Supabase, saving to local storage', e);
     }
-  }
+  } catch { /* fall through */ }
 
+  // localStorage fallback
   const updated = [...readLocalTrips(), newTrip];
   writeLocalTrips(updated);
 
   try {
     await saveVehicleProfile({ current_odometer: roundToIntegerKm(input.end_km) });
     await saveVehicleProfile({ current_fuel_level: roundToOneDecimal(targetPage!.end_fuel_balance) });
-  } catch (e) {
-    console.warn('Failed to update vehicle odometer', e);
-  }
+  } catch { /* ignore */ }
 
-  // Chronological renumber on back-dated insertion: if new date precedes earliest page,
-  // sort pages chronologically and cascade page_number/page_id + Trip.page_id.
-  // Dates are never mutated; pagination constraints preserved (grouping unchanged).
-  // Spec example: book starts 2026-01-01 Page 1 at 50,000 km, then 2025-01-01 trips inserted as new Pages 1-2, old Page renumbered.
+  // Chronological renumber on back-dated insertion
   try {
     const earliestBefore = getEarliestOverallDate(pages, allTrips);
     const isBackdated = earliestBefore !== null && input.date < earliestBefore;
     if (isBackdated) {
-      const pagesAfter = await getPages();
-      const tripsAfter = [...readLocalTrips()];
-      const { pages: renumberedPages, trips: renumberedTrips } = renumberPagesChronologically(pagesAfter, tripsAfter);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fleetledger_book_pages', JSON.stringify(renumberedPages.sort((a, b) => a.page_number - b.page_number)));
-        localStorage.setItem('fleetledger_trips', JSON.stringify(renumberedTrips));
-      }
+      const { applyChronologicalRenumber } = await import('./pageStore');
+      await applyChronologicalRenumber();
     }
-  } catch (e) {
-    console.warn('Failed to apply chronological renumber after backdated trip', e);
-  }
+  } catch { /* ignore */ }
 
   return newTrip;
 }
@@ -250,10 +190,9 @@ export interface TripUpdateFields {
 
 export async function updateTrip(tripId: string, fields: TripUpdateFields): Promise<Trip | null> {
   const trips = await getTrips();
-  const idx = trips.findIndex((t) => t.id === tripId);
-  if (idx === -1) return null;
+  const existing = trips.find(t => t.id === tripId);
+  if (!existing) return null;
 
-  const existing = trips[idx];
   const updated: Trip = {
     ...existing,
     ...fields,
@@ -267,31 +206,25 @@ export async function updateTrip(tripId: string, fields: TripUpdateFields): Prom
     fuel_pumped_amount: fields.fuel_pumped_amount !== undefined ? roundToOneDecimal(fields.fuel_pumped_amount) : existing.fuel_pumped_amount,
   };
 
-  // Persist to Supabase or localStorage
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.from('trips').update(updated).eq('id', tripId).select().single();
-      if (data && !error) {
-        // Recalculate page end values if KM changed
+  // Try API first
+  try {
+    const res = await apiFetch('/api/trips', { method: 'PUT', body: JSON.stringify(updated) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data) {
         if (fields.start_km !== undefined || fields.end_km !== undefined) {
           await recalculatePageEndForTrip(updated);
         }
         return data as Trip;
       }
-    } catch (e) {
-      console.warn('Failed to update trip in Supabase, updating locally', e);
     }
-  }
+  } catch { /* fall through */ }
 
   // localStorage fallback
   const localTrips = readLocalTrips();
-  const localIdx = localTrips.findIndex((t) => t.id === tripId);
-  if (localIdx >= 0) {
-    localTrips[localIdx] = updated;
-    writeLocalTrips(localTrips);
-  }
+  const idx = localTrips.findIndex(t => t.id === tripId);
+  if (idx >= 0) { localTrips[idx] = updated; writeLocalTrips(localTrips); }
 
-  // Recalculate page end values if KM changed
   if (fields.start_km !== undefined || fields.end_km !== undefined) {
     await recalculatePageEndForTrip(updated);
   }
@@ -302,17 +235,14 @@ export async function updateTrip(tripId: string, fields: TripUpdateFields): Prom
 async function recalculatePageEndForTrip(trip: Trip): Promise<void> {
   const pages = await getPages();
   const allTrips = await getTrips();
-  const page = pages.find((p) => p.id === trip.page_id);
+  const page = pages.find(p => p.id === trip.page_id);
   if (!page) return;
 
-  // Find the last trip on this page (by end_km descending) to update page end_km
-  const pageTrips = allTrips.filter((t) => t.page_id === trip.page_id);
+  const pageTrips = allTrips.filter(t => t.page_id === trip.page_id);
   const lastTrip = pageTrips.reduce((latest, t) => (t.end_km > latest.end_km ? t : latest), pageTrips[0]);
-
   if (lastTrip) {
     const defaultEconomy = 10.5;
-    const dayDistance = roundToIntegerKm(lastTrip.trip_distance);
-    const consumed = calculateConsumed(dayDistance, defaultEconomy);
+    const consumed = calculateConsumed(roundToIntegerKm(lastTrip.trip_distance), defaultEconomy);
     const fuelPumped = roundToOneDecimal(lastTrip.fuel_pumped_amount ?? 0);
     const newEndFuel = calculateBalance(roundToOneDecimal(page.end_fuel_balance), fuelPumped, consumed);
     await updatePageEndValues(page.id, roundToIntegerKm(lastTrip.end_km), newEndFuel);
@@ -320,7 +250,5 @@ async function recalculatePageEndForTrip(trip: Trip): Promise<void> {
 }
 
 export function clearTrips(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
-  }
+  if (typeof window !== 'undefined') localStorage.removeItem(LOCAL_STORAGE_KEY);
 }
