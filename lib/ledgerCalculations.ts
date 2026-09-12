@@ -243,3 +243,32 @@ export function groupTripsByDateForSide1(trips: Trip[], pageId: string): DayGrou
     };
   });
 }
+
+/**
+ * Page-Wide Trip Sequence: 1..N continuous across Day Groups for a page.
+ * Trips sorted by date, then trip_index, then start_km (spec §24).
+ */
+export function computePageSeq(dayGroups: DayGroup[]): number[] {
+  const flatTrips = dayGroups.flatMap((g) => g.trips);
+  const sorted = [...flatTrips].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.trip_index !== b.trip_index) return a.trip_index - b.trip_index;
+    return a.start_km - b.start_km;
+  });
+  return sorted.map((_, idx) => idx + 1);
+}
+
+/**
+ * Global Chronological Sequence: Map<tripId, seq> for cross-Book traceability.
+ * Sorts all trips by date, then trip_index, then start_km, assigns 1..T.
+ */
+export function computeGlobalSeq(trips: Trip[]): Map<string, number> {
+  const sorted = [...trips].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.trip_index !== b.trip_index) return a.trip_index - b.trip_index;
+    return a.start_km - b.start_km;
+  });
+  const map = new Map<string, number>();
+  sorted.forEach((t, idx) => map.set(t.id, idx + 1));
+  return map;
+}

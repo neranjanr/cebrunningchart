@@ -10,6 +10,7 @@ import {
   filterTripsByGlobalSearch,
   computeFilteredSums,
 } from '@/lib/dashboardCalculations';
+import { computeGlobalSeq } from '@/lib/ledgerCalculations';
 import { useGlobalSearch } from '@/lib/globalSearchContext';
 
 interface Props {
@@ -36,6 +37,9 @@ export function AllTripsMasterTable({ trips, pages, title = 'All Trips Master Ta
   }, [trips, globalQuery, search, tripType, month, sortColumn, sortDirection]);
 
   const sums = useMemo(() => computeFilteredSums(filtered), [filtered]);
+
+  // Global chronological sequence 1..T (independent of page, for cross-Book traceability)
+  const globalSeqMap = useMemo(() => computeGlobalSeq(trips), [trips]);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -171,7 +175,7 @@ export function AllTripsMasterTable({ trips, pages, title = 'All Trips Master Ta
                 <tr key={t.id} data-testid={`trip-row-${t.id}`} className="hover:bg-paper-ledger font-medium">
                   <td className="py-2.5 px-3 whitespace-nowrap font-mono text-xs border-r border-rule-line">{t.date}</td>
                   <td className="py-2.5 px-2 text-xs font-semibold text-on-surface-variant border-r border-rule-line">{t.day_index}</td>
-                  <td className="py-2.5 px-2 text-center font-mono text-xs border-r border-rule-line">{t.trip_index}</td>
+                  <td className="py-2.5 px-2 text-center font-mono text-xs border-r border-rule-line">{globalSeqMap.get(t.id) ?? '-'}</td>
                   <td className="py-2.5 px-2 whitespace-nowrap font-mono text-xs border-r border-rule-line">
                     {t.start_time}–{t.end_time}
                   </td>

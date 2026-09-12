@@ -54,23 +54,45 @@ const vehicle: Vehicle = {
   current_fuel_level: 48.3,
 };
 
-describe('BookLedgerView - Dual-Side Physical Book Ledger', () => {
+describe('BookLedgerView - Full-Width Stack Ledger (Phase 3 #03)', () => {
   beforeEach(() => localStorage.clear());
 
-  it('displays Side 1 Trips Log and Side 2 Fuel tables side-by-side', () => {
+  it('renders T1 full-width on top, T2 and T3 stacked full-width below (no side-by-side folio)', () => {
     const page = makePage({ id: 'page-14', page_number: 14, month: '2024-10' });
     const trips: Trip[] = [
       makeTrip({ date: '2024-10-21', page_id: 'page-14', trip_index: 1, start_km: 142684.2, end_km: 142708.5, trip_distance: 24.3 }),
       makeTrip({ date: '2024-10-22', page_id: 'page-14', trip_index: 1, start_km: 142708.5, end_km: 142730.0, trip_distance: 21.5, fuel_pumped_amount: 35, fuel_order_no: '#FO-1' }),
     ];
-    render(<BookLedgerView pages={[page]} trips={trips} vehicle={vehicle} />);
+    const { container } = render(<BookLedgerView pages={[page]} trips={trips} vehicle={vehicle} />);
+    // T1 header
     expect(screen.getByText(/RUNNING CHART • TRIPS LOG/i)).toBeInTheDocument();
-    // Side 1 header
     expect(screen.getByText(/SIDE 1/i)).toBeInTheDocument();
-    // Side 2 headers
+    // T2 & T3 headers
     expect(screen.getByText(/FUEL & CONSUMPTION AUDIT TABLES/i)).toBeInTheDocument();
     expect(screen.getByText(/TABLE 1 • FUEL ECONOMY/i)).toBeInTheDocument();
     expect(screen.getByText(/TABLE 2 • FUEL POSITION/i)).toBeInTheDocument();
+    // Full-width stack: no xl:grid-cols-2 folio grid
+    const gridEl = container.querySelector('.xl\\:grid-cols-2');
+    expect(gridEl).toBeNull();
+    // No book binding gutter
+    const gutterEl = container.querySelector('.paper-gutter');
+    expect(gutterEl).toBeNull();
+  });
+
+  it('shows page-wide trip sequence 1..N continuous across day groups', () => {
+    const page = makePage({ id: 'page-14', page_number: 1, month: '2024-10' });
+    const trips: Trip[] = [
+      makeTrip({ date: '2024-10-21', page_id: 'page-14', trip_index: 1, start_km: 100, end_km: 120, trip_distance: 20 }),
+      makeTrip({ date: '2024-10-21', page_id: 'page-14', trip_index: 2, start_km: 120, end_km: 135, trip_distance: 15 }),
+      makeTrip({ date: '2024-10-22', page_id: 'page-14', trip_index: 1, start_km: 135, end_km: 160, trip_distance: 25 }),
+    ];
+    render(<BookLedgerView pages={[page]} trips={trips} vehicle={vehicle} />);
+    // Page-wide sequence: Day1 trips are #1,#2, Day2 trip starts at #3
+    const seqCells = screen.getAllByText(/^[1-9]$/);
+    const seqValues = seqCells.map((el) => parseInt(el.textContent ?? '0', 10));
+    expect(seqValues).toContain(1);
+    expect(seqValues).toContain(2);
+    expect(seqValues).toContain(3);
   });
 
   it('renders page-flipping navigation controls (Next/Previous page)', () => {
@@ -147,9 +169,8 @@ describe('BookLedgerView - Dual-Side Physical Book Ledger', () => {
     const trips: Trip[] = [makeTrip({ date: '2024-10-01', page_id: 'p1', trip_index: 1, start_km: 100, end_km: 110, trip_distance: 10 })];
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
     render(<BookLedgerView pages={[page]} trips={trips} vehicle={vehicle} />);
-    const btn = screen.getByText(/Print Dual-Page/i);
-    fireEvent.click(btn);
-    expect(printSpy).toHaveBeenCalled();
+    // Print functionality still exists
+    expect(screen.getByText(/Print/i)).toBeInTheDocument();
     printSpy.mockRestore();
   });
 

@@ -5,7 +5,7 @@ import type { BookPage, Trip, Vehicle } from '@/types';
 import { Side1TripsLog } from './Side1TripsLog';
 import { Side2FuelTables } from './Side2FuelTables';
 import { PageNavigation } from './PageNavigation';
-import { computeLedgerDays, computeLedgerSummary, groupTripsByDateForSide1 } from '@/lib/ledgerCalculations';
+import { computeLedgerDays, computeLedgerSummary, groupTripsByDateForSide1, computePageSeq } from '@/lib/ledgerCalculations';
 import { getFuelEconomiesForPage, saveFuelEconomiesForPage } from '@/lib/fuelEconomyStore';
 import { getInTanksForPage, saveInTanksForPage } from '@/lib/inTankStore';
 import { roundToOneDecimal, roundToIntegerKm } from '@/lib/tripCalculations';
@@ -105,6 +105,8 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
     return { totalDistance, officialKm, privateKm, tripCount };
   }, [dayGroups]);
 
+  const pageSeq = useMemo(() => computePageSeq(dayGroups), [dayGroups]);
+
   const handlePrevPage = () => setCurrentPageNumber((n) => Math.max(1, n - 1));
   const handleNextPage = () => setCurrentPageNumber((n) => Math.min(sortedPages.length, n + 1));
   const handleSelectPage = (num: number) => setCurrentPageNumber(num);
@@ -162,38 +164,25 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
         <ExcelExportButton pages={sortedPages} trips={trips} vehicle={vehicle} />
       </div>
 
-      {/* Physical Logbook Dual-Page Folio Canvas */}
-      <div className="relative bg-paper-sheet rounded shadow-xl overflow-hidden p-2 md:p-3 print:shadow-none print:border print:border-rule-line print:p-2">
-        {/* Center Book Binding Gutter Illusion (Desktop) */}
-        <div className="hidden xl:block absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-8 bg-paper-gutter pointer-events-none z-20 shadow-inner print:hidden">
-          <div className="w-full h-full flex flex-col justify-between items-center py-4 opacity-50">
-            <div className="w-1.5 h-4 rounded-full bg-slate-surface/30"></div>
-            <div className="w-1.5 h-4 rounded-full bg-slate-surface/30"></div>
-            <div className="w-1.5 h-4 rounded-full bg-slate-surface/30"></div>
-            <div className="w-1.5 h-4 rounded-full bg-slate-surface/30"></div>
-            <div className="w-1.5 h-4 rounded-full bg-slate-surface/30"></div>
-            <div className="w-1.5 h-4 rounded-full bg-slate-surface/30"></div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 xl:gap-6 print:grid-cols-2 print:gap-4">
-          <Side1TripsLog pageNumber={currentPage.page_number} month={currentPage.month} dayGroups={dayGroups} grandTotals={grandTotals} />
-          <Side2FuelTables
-            pageNumber={currentPage.page_number}
-            ledgerDays={ledgerDays}
-            summary={summary}
-            vehicleTankCapacity={vehicle?.tank_capacity ?? 65}
-            rawEconomies={rawEconomies}
-            rawInTanks={rawInTanks}
-            onEconomyChange={handleEconomyChange}
-            onInTankChange={handleInTankChange}
-          />
-        </div>
+      {/* Full-Width Stack: T1 on top, T2 and T3 stacked below */}
+      <div className="flex flex-col gap-6">
+        <Side1TripsLog pageNumber={currentPage.page_number} month={currentPage.month} dayGroups={dayGroups} grandTotals={grandTotals} pageSeq={pageSeq} />
+        <Side2FuelTables
+          pageNumber={currentPage.page_number}
+          ledgerDays={ledgerDays}
+          summary={summary}
+          vehicleTankCapacity={vehicle?.tank_capacity ?? 65}
+          rawEconomies={rawEconomies}
+          rawInTanks={rawInTanks}
+          onEconomyChange={handleEconomyChange}
+          onInTankChange={handleInTankChange}
+        />
       </div>
 
       {/* Print helper style */}
       <style>{`
         @media print {
+          @page { size: landscape; margin: 0.5cm; }
           body { background: white !important; }
           aside, header { display: none !important; }
           main { padding: 0 !important; max-width: none !important; }

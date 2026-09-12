@@ -10,6 +10,7 @@ interface Props {
   month: string; // YYYY-MM
   dayGroups: DayGroup[];
   grandTotals: { totalDistance: number; officialKm: number; privateKm: number; tripCount: number };
+  pageSeq: number[];
 }
 
 function formatMonthLabel(month: string): string {
@@ -34,7 +35,7 @@ function formatMonthLabel(month: string): string {
   return `${months[idx] ?? m} ${y}`;
 }
 
-export function Side1TripsLog({ pageNumber, month, dayGroups, grandTotals }: Props) {
+export function Side1TripsLog({ pageNumber, month, dayGroups, grandTotals, pageSeq }: Props) {
   if (dayGroups.length === 0) {
     return (
       <div className="flex flex-col bg-paper-ledger p-3 rounded shadow-sm print:shadow-none print:border print:border-rule-line">
@@ -82,53 +83,56 @@ export function Side1TripsLog({ pageNumber, month, dayGroups, grandTotals }: Pro
             </tr>
           </thead>
           <tbody className="text-[13px] leading-[18px] font-medium divide-y-0">
-            {dayGroups.map((group) => (
-              <React.Fragment key={group.date}>
-                {/* Day Header */}
-                <tr className="bg-surface-container-high text-on-surface font-semibold">
-                  <td colSpan={10} className="py-1 px-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold tracking-widest uppercase">
-                        DAY {group.dayIndex}: {getDayOfWeek(group.date).toUpperCase()}, {group.date}
-                      </span>
-                      <span className="text-[10px] font-medium tracking-widest uppercase text-on-surface-variant">Opening Odo: {group.startKm} KM</span>
-                    </div>
-                  </td>
-                </tr>
-                {group.trips.map((t: Trip, idx: number) => (
-                  <tr key={t.id} className={`${idx % 2 === 0 ? 'bg-paper-sheet' : 'bg-paper-ledger'} hover:bg-surface-container-low transition-colors`}>
-                    <td className="py-2 px-2.5 text-center text-[10px] font-semibold tracking-widest text-on-surface-variant border border-rule-line">
-                      {t.date.slice(5).replace('-', '/')} {getDayOfWeek(t.date).slice(0, 3)}
-                    </td>
-                    <td className="py-2 px-2.5 text-center font-mono text-sm font-semibold border border-rule-line">{t.trip_index}</td>
-                    <td className="py-2 px-2.5 text-center font-mono text-sm border border-rule-line">{t.start_time || '-'}</td>
-                    <td className="py-2 px-2.5 text-center font-mono text-sm border border-rule-line">{t.end_time}</td>
-                    <td className="py-2 px-2.5 text-right font-mono text-sm border border-rule-line">{Math.round(t.start_km)}</td>
-                    <td className="py-2 px-2.5 text-right font-mono text-sm border border-rule-line">{Math.round(t.end_km)}</td>
-                    <td className="py-2 px-2.5 text-right font-mono text-sm font-bold text-on-surface border border-rule-line">{Math.round(t.trip_distance)}</td>
-                    <td className="py-2 px-2.5 text-center border border-rule-line">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase ${t.trip_type === 'Official' ? 'bg-surface-container-highest text-trip-official' : 'bg-surface-container text-trip-private'}`}>
-                        {t.trip_type.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2.5 truncate max-w-[140px] border border-rule-line" title={t.places_visited}>{t.places_visited}</td>
-                    <td className="py-2 px-2.5 text-right text-[10px] font-semibold tracking-widest text-on-surface-variant border border-rule-line">
-                      {t.fuel_pumped_amount && t.fuel_pumped_amount > 0 ? `${t.fuel_pumped_amount.toFixed(1)} L${t.fuel_order_no ? ` (${t.fuel_order_no})` : ''}` : '-'}
+            {dayGroups.map((group, groupIdx) => {
+              const seqOffset = dayGroups.slice(0, groupIdx).reduce((s, g) => s + g.trips.length, 0);
+              return (
+                <React.Fragment key={group.date}>
+                  {/* Day Header */}
+                  <tr className="bg-surface-container-high text-on-surface font-semibold">
+                    <td colSpan={10} className="py-1 px-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold tracking-widest uppercase">
+                          DAY {group.dayIndex}: {getDayOfWeek(group.date).toUpperCase()}, {group.date}
+                        </span>
+                        <span className="text-[10px] font-medium tracking-widest uppercase text-on-surface-variant">Opening Odo: {group.startKm} KM</span>
+                      </div>
                     </td>
                   </tr>
-                ))}
-                {/* Subtotal */}
-                <tr className="bg-surface-container-low font-semibold text-on-surface">
-                  <td colSpan={6} className="py-2 px-2.5 text-right text-[11px] font-semibold tracking-widest uppercase text-on-surface-variant border border-rule-line-strong">
-                    Day {group.dayIndex} Subtotals ({group.trips.length} Trips):
-                  </td>
-                  <td className="py-2 px-2.5 text-right font-mono text-sm font-bold text-primary border border-rule-line-strong">{group.distance}</td>
-                  <td colSpan={3} className="py-2 px-2.5 text-[11px] font-semibold tracking-widest text-on-surface-variant border border-rule-line-strong">
-                    Off: {group.officialKm} km | Priv: {group.privateKm} km
-                  </td>
-                </tr>
-              </React.Fragment>
-            ))}
+                  {group.trips.map((t: Trip, idx: number) => (
+                    <tr key={t.id} className={`${idx % 2 === 0 ? 'bg-paper-sheet' : 'bg-paper-ledger'} hover:bg-surface-container-low transition-colors`}>
+                      <td className="py-2 px-2.5 text-center text-[10px] font-semibold tracking-widest text-on-surface-variant border border-rule-line">
+                        {t.date.slice(5).replace('-', '/')} {getDayOfWeek(t.date).slice(0, 3)}
+                      </td>
+                      <td className="py-2 px-2.5 text-center font-mono text-sm font-semibold border border-rule-line">{pageSeq[seqOffset + idx]}</td>
+                      <td className="py-2 px-2.5 text-center font-mono text-sm border border-rule-line">{t.start_time || '-'}</td>
+                      <td className="py-2 px-2.5 text-center font-mono text-sm border border-rule-line">{t.end_time}</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-sm border border-rule-line">{Math.round(t.start_km)}</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-sm border border-rule-line">{Math.round(t.end_km)}</td>
+                      <td className="py-2 px-2.5 text-right font-mono text-sm font-bold text-on-surface border border-rule-line">{Math.round(t.trip_distance)}</td>
+                      <td className="py-2 px-2.5 text-center border border-rule-line">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase ${t.trip_type === 'Official' ? 'bg-surface-container-highest text-trip-official' : 'bg-surface-container text-trip-private'}`}>
+                          {t.trip_type.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2.5 truncate max-w-[140px] border border-rule-line" title={t.places_visited}>{t.places_visited}</td>
+                      <td className="py-2 px-2.5 text-right text-[10px] font-semibold tracking-widest text-on-surface-variant border border-rule-line">
+                        {t.fuel_pumped_amount && t.fuel_pumped_amount > 0 ? `${t.fuel_pumped_amount.toFixed(1)} L${t.fuel_order_no ? ` (${t.fuel_order_no})` : ''}` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Subtotal */}
+                  <tr className="bg-surface-container-low font-semibold text-on-surface">
+                    <td colSpan={6} className="py-2 px-2.5 text-right text-[11px] font-semibold tracking-widest uppercase text-on-surface-variant border border-rule-line-strong">
+                      Day {group.dayIndex} Subtotals ({group.trips.length} Trips):
+                    </td>
+                    <td className="py-2 px-2.5 text-right font-mono text-sm font-bold text-primary border border-rule-line-strong">{group.distance}</td>
+                    <td colSpan={3} className="py-2 px-2.5 text-[11px] font-semibold tracking-widest text-on-surface-variant border border-rule-line-strong">
+                      Off: {group.officialKm} km | Priv: {group.privateKm} km
+                    </td>
+                  </tr>
+                </React.Fragment>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="bg-slate-surface text-on-primary font-bold">

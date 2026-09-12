@@ -4,6 +4,8 @@ import {
   computeLedgerDays,
   computeLedgerSummary,
   groupTripsByDateForSide1,
+  computePageSeq,
+  computeGlobalSeq,
   DEFAULT_FUEL_ECONOMY,
 } from './ledgerCalculations';
 import type { BookPage, Trip } from '@/types';
@@ -178,5 +180,97 @@ describe('groupTripsByDateForSide1', () => {
     expect(groups[0].officialKm).toBe(10.0);
     expect(groups[0].privateKm).toBe(5.0);
     expect(groups[1].distance).toBe(7.0);
+  });
+});
+
+describe('computePageSeq', () => {
+  it('returns 1..N page-wide sequence continuous across day groups', () => {
+    const groups = [
+      {
+        date: '2024-10-21',
+        dayLabel: 'Mon 21 Oct',
+        dayIndex: 1,
+        trips: [
+          makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 1 }),
+          makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 2 }),
+          makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 3 }),
+        ],
+        startKm: 100,
+        endKm: 130,
+        distance: 30,
+        officialKm: 30,
+        privateKm: 0,
+      },
+      {
+        date: '2024-10-22',
+        dayLabel: 'Tue 22 Oct',
+        dayIndex: 2,
+        trips: [
+          makeTrip({ date: '2024-10-22', page_id: 'p1', trip_index: 1 }),
+          makeTrip({ date: '2024-10-22', page_id: 'p1', trip_index: 2 }),
+        ],
+        startKm: 130,
+        endKm: 155,
+        distance: 25,
+        officialKm: 25,
+        privateKm: 0,
+      },
+    ];
+    const seq = computePageSeq(groups);
+    expect(seq).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('returns empty array for empty day groups', () => {
+    expect(computePageSeq([])).toEqual([]);
+  });
+
+  it('returns single-element array for one trip', () => {
+    const groups = [
+      {
+        date: '2024-10-21',
+        dayLabel: 'Mon 21 Oct',
+        dayIndex: 1,
+        trips: [makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 1 })],
+        startKm: 100,
+        endKm: 110,
+        distance: 10,
+        officialKm: 10,
+        privateKm: 0,
+      },
+    ];
+    expect(computePageSeq(groups)).toEqual([1]);
+  });
+});
+
+describe('computeGlobalSeq', () => {
+  it('returns Map<tripId, seq> with independent global chronological sequence 1..T', () => {
+    const trips = [
+      makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 1, start_km: 100, end_km: 110 }),
+      makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 2, start_km: 110, end_km: 120 }),
+      makeTrip({ date: '2024-10-22', page_id: 'p1', trip_index: 1, start_km: 120, end_km: 135 }),
+      makeTrip({ date: '2024-10-25', page_id: 'p2', trip_index: 1, start_km: 200, end_km: 215 }),
+    ];
+    const seq = computeGlobalSeq(trips);
+    expect(seq.size).toBe(4);
+    // Sorted: Oct 21 #1, Oct 21 #2, Oct 22 #1, Oct 25 #1
+    expect(seq.get(trips[0].id)).toBe(1);
+    expect(seq.get(trips[1].id)).toBe(2);
+    expect(seq.get(trips[2].id)).toBe(3);
+    expect(seq.get(trips[3].id)).toBe(4);
+  });
+
+  it('returns empty map for empty trips', () => {
+    expect(computeGlobalSeq([]).size).toBe(0);
+  });
+
+  it('sorts chronologically by date then trip_index then start_km', () => {
+    const t1 = makeTrip({ date: '2024-10-22', page_id: 'p1', trip_index: 1, start_km: 200, end_km: 210 });
+    const t2 = makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 2, start_km: 110, end_km: 120 });
+    const t3 = makeTrip({ date: '2024-10-21', page_id: 'p1', trip_index: 1, start_km: 100, end_km: 110 });
+    const seq = computeGlobalSeq([t1, t2, t3]);
+    // Sorted: t3 (Oct 21 #1), t2 (Oct 21 #2), t1 (Oct 22 #1)
+    expect(seq.get(t3.id)).toBe(1);
+    expect(seq.get(t2.id)).toBe(2);
+    expect(seq.get(t1.id)).toBe(3);
   });
 });
