@@ -7,6 +7,7 @@ import { getTrips } from '@/lib/tripStore';
 import { getVehicleProfile } from '@/lib/vehicleStore';
 import type { BookPage, Trip, Vehicle } from '@/types';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ContinuityAlertBanner } from '@/components/ContinuityAlertBanner';
 
 export default function LedgerPage() {
   const [pages, setPages] = useState<BookPage[]>([]);
@@ -34,7 +35,10 @@ export default function LedgerPage() {
 
   return (
     <ProtectedRoute>
-      <BookLedgerView pages={pages} trips={trips} vehicle={vehicle} />
+      <div className="flex flex-col gap-4">
+        <ContinuityAlertBanner pages={pages} trips={trips} />
+        <BookLedgerView pages={pages} trips={trips} vehicle={vehicle} />
+      </div>
     </ProtectedRoute>
   );
 }

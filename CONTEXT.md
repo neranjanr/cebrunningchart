@@ -29,6 +29,9 @@ _Avoid_: Daily batch
 **Fuel Economy**: Kilometres per litre for a Day Group, propagated forward until explicitly overridden; fallback 10.5 km/L.
 _Avoid_: Mileage, efficiency
 
+**Adjusted Fuel Economy**: A Day Group where Fuel Economy has an explicit override (stored per Page+Day, stepped ±0.1 from existing value, rounded to 1 decimal, clamped 0.1–50); rendered with an "Adjusted" badge; reverting to the inherited value deletes the override so the badge disappears and the Day inherits again.
+_Avoid_: Custom economy, edited economy
+
 **Fuel Position**: Fuel balance carried from the previous Day Group's Closing Balance; Page N+1 Day 1 inherits Page N's final Closing Balance.
 _Avoid_: Opening fuel, previous balance
 
@@ -44,8 +47,17 @@ _Avoid_: Usage, burn
 **Closing Balance**: Fuel remaining at end of a Day Group, calculated as Position + In-Tank + Drawn − Consumed, rounded to 1 decimal.
 _Avoid_: Ending balance, remainder
 
-**Integer KM**: Odometer values (Start KM, End KM, Trip Distance) stored and displayed as whole kilometres with no decimals; fuel values retain 1 decimal.
+**Integer KM**: Odometer values (Start KM, End KM, Trip Distance) stored and displayed as whole kilometres with no decimals (decimal input is rounded on blur/save, `numFmt '0'` in Excel); fuel values retain 1 decimal for consumption/balance maths.
 _Avoid_: Decimal odometer, 1-dec km
+
+**Page-Wide Trip Sequence**: Derived continuous numbering 1..N per Page across Day Groups for Ledger display (not stored, recomputed from chronological sort), replacing per-day trip_index; All Trips global sequence is separate 1..T chronologically across the Book.
+_Avoid_: Day-local index, stored seq
+
+**KM Gap**: Odometer discontinuity where a Page's End KM ≠ next Page's Start KM, or a Trip's End KM ≠ next Trip's Start KM (chronological sort); rendered in RED near the next Page/Trip's Start KM and as inline RED cell highlight.
+_Avoid_: Mileage gap, odometer mismatch
+
+**Fuel Gap**: Fuel discontinuity where a Page's End Fuel Balance ≠ next Page's Start Fuel Balance (or trip-implied fuel stock gap per Day Group); rendered in AMBER/ORANGE distinct from KM Gap, near next Page's Start Fuel and as inline AMBER cell highlight.
+_Avoid_: Fuel mismatch, tank gap
 
 ### Auth & Access
 
@@ -57,6 +69,9 @@ _Avoid_: Whitelisted user, approved account
 
 **Landing**: The public unauthenticated entry page showing login (Super Admin password + Google SSO) and no ledger data.
 _Avoid_: Homepage, login screen
+
+**Landing Gate**: Strict auth guard where every route except Landing hard-redirects to Landing when unauthenticated, before any ledger or vehicle data fetch; no flash of data, session expiry also redirects with toast.
+_Avoid_: Soft gate, lazy redirect
 
 ### UX & Operations
 
@@ -75,5 +90,14 @@ _Avoid_: Finder, lookup
 **Continuity Break**: A ledger gap where Page N End KM ≠ Page N+1 Start KM or End Fuel Balance ≠ next Start Fuel Balance, surfaced as an alert banner with optional recalculation.
 _Avoid_: Mismatch, discontinuity error
 
+**Continuity Alert**: Persistent, non-dismissible banner/drawer listing every KM Gap (RED) and Fuel Gap (AMBER) at Page-to-Page and Trip-to-Trip levels; survives refresh, shows expected vs actual and jump-to-page/trip links, clears only when gaps are fixed or missing records are added to close them (no auto-recalc).
+_Avoid_: Toast alert, dismissible warning
+
+**All Trips Workbook**: Excel file named per All Trips table with Sheet "All Trips" and header row `Date | Start KM | End KM | Distance | Start Time | End Time | Type | Places Visited | Fuel Pumped | Fuel Order No` (case-insensitive, order-enforced); export writes that sheet, import validates pre-flight and appends chronologically without overwriting.
+_Avoid_: Book-Mirror sheet, generic export
+
 **Transposed Side 2**: Side 2 Fuel Economy & Position tables rendered with days as columns to mirror the physical book's landscape layout, matching Side 1 column orientation.
 _Avoid_: Rotated tables, flipped view
+
+**Ledger Full-Width Stack**: Ledger Page View layout where Table 1 (Trips Log) occupies full width on top, with Table 2 (Fuel Economy & Consumption) and Table 3 (Fuel Position & Balance) stacked full-width beneath it, replacing the dual-column Side 1 / Side 2 folio; print and responsive rules preserve this stack.
+_Avoid_: Side-by-side folio, two-column ledger

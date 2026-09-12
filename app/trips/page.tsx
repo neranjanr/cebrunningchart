@@ -7,6 +7,7 @@ import { getPages } from '@/lib/pageStore';
 import { getTrips } from '@/lib/tripStore';
 import { AllTripsMasterTable } from '@/components/dashboard/AllTripsMasterTable';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ContinuityAlertBanner } from '@/components/ContinuityAlertBanner';
 
 export default function TripsMasterPage() {
   const [pages, setPages] = useState<BookPage[]>([]);
@@ -42,6 +43,9 @@ export default function TripsMasterPage() {
             + New Trip
           </Link>
         </div>
+
+        <ContinuityAlertBanner pages={pages} trips={trips} />
+
         {trips.length === 0 ? (
           <div className="bg-paper-sheet rounded-xl border border-rule-line p-12 text-center flex flex-col items-center gap-3">
             <span className="text-4xl">📋</span>

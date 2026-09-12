@@ -13,6 +13,7 @@ import { PageWiseChart } from '@/components/dashboard/PageWiseChart';
 import { AllTripsMasterTable } from '@/components/dashboard/AllTripsMasterTable';
 import { ExcelExportButton } from '@/components/ExcelExportButton';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ContinuityAlertBanner } from '@/components/ContinuityAlertBanner';
 
 export default function DashboardPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -63,6 +64,8 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
+
+        <ContinuityAlertBanner pages={pages} trips={trips} />
 
       {/* Metric cards */}
       <MetricCards metrics={metrics} />
