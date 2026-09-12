@@ -312,6 +312,43 @@ function createBookPage(pageId: string, vehicleId: string, pageNumber: number, d
 }
 
 /**
+ * Check if any imported trip's [start_km, end_km] range overlaps an existing trip on the same date.
+ * Strict overlap: any overlap = reject. Different dates can have overlapping KM ranges (different pages).
+ */
+export function validateNoOverlap(existingTrips: Trip[], importedTrips: Partial<Trip>[]): ImportError[] {
+  const errors: ImportError[] = [];
+
+  // Group existing trips by date for fast lookup
+  const existingByDate = new Map<string, Trip[]>();
+  for (const t of existingTrips) {
+    const list = existingByDate.get(t.date) || [];
+    list.push(t);
+    existingByDate.set(t.date, list);
+  }
+
+  for (let i = 0; i < importedTrips.length; i++) {
+    const trip = importedTrips[i];
+    if (!trip.date || trip.start_km === undefined || trip.end_km === undefined) continue;
+
+    const sameDateTrips = existingByDate.get(trip.date) || [];
+    for (const existing of sameDateTrips) {
+      // Overlap check: two ranges [a,b] and [c,d] overlap if a < d and c < b
+      const overlaps = trip.start_km < existing.end_km && existing.start_km < trip.end_km;
+      if (overlaps) {
+        errors.push({
+          row: i + 2,
+          field: 'KM Range',
+          message: `KM range ${trip.start_km}–${trip.end_km} overlaps existing trip ${existing.start_km}–${existing.end_km} on ${trip.date}`,
+        });
+        break; // One error per imported row is enough
+      }
+    }
+  }
+
+  return errors;
+}
+
+/**
  * Pre-flight pagination validation for imported trips.
  * Checks 4/13/month constraints as if trips were added chronologically.
  * Returns errors if any pagination rule would be violated.

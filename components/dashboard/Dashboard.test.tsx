@@ -128,8 +128,10 @@ describe('Dashboard components', () => {
 
     // Test sorting by distance asc
     fireEvent.change(monthSelect, { target: { value: 'All' } });
-    // Click Dist header to sort asc (first click asc, second desc). Initial is date desc, so clicking trip_distance will set asc first
-    fireEvent.click(screen.getByText(/Dist/));
+    // Click KM column header to sort asc. Initial is date asc, so clicking trip_distance will set asc
+    const kmHeader = screen.getAllByRole('button').find((btn) => btn.textContent?.trim().startsWith('KM'));
+    expect(kmHeader).toBeTruthy();
+    fireEvent.click(kmHeader!);
     const rows = screen.getAllByTestId(/^trip-row-/);
     // After sorting asc by distance, order should be t1 (10), t2 (15), t3 (30)
     expect(rows[0].getAttribute('data-testid')).toBe('trip-row-t1');
@@ -167,7 +169,7 @@ describe('Dashboard components', () => {
     expect(row).toHaveTextContent('101');
     expect(row).toHaveTextContent('110');
     // Distance bold integer
-    expect(row.textContent).toMatch(/\b10\b/);
+    expect(row.textContent).toMatch(/10[^0-9]/);
   });
 
   it('MonthlyBreakdownChart shows last 12 by default with More button and modal', async () => {

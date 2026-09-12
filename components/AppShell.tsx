@@ -4,7 +4,6 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { GoogleLoginButton } from './GoogleLoginButton';
-import { GlobalSearchInput } from '@/lib/globalSearchContext';
 import { useAuth } from '@/lib/authContext';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -90,17 +89,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <GoogleLoginButton />
           </div>
         </header>
-        {/* Desktop top bar with Global Search + Help link (Landing uses own header, so only after auth shows) */}
+        {/* Desktop top bar */}
         <div className="hidden lg:flex h-12 bg-paper-sheet border-b border-rule-line items-center justify-between px-6 sticky top-0 z-30">
           <div className="flex items-center gap-3">
-            {(pathname === '/' || pathname?.startsWith('/ledger')) && user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant whitespace-nowrap">Global Search</span>
-                <GlobalSearchInput />
-              </div>
-            ) : (
-              <span className="text-xs text-on-surface-variant">FleetLedger • Audit Running Chart</span>
-            )}
+            <span className="text-xs text-on-surface-variant">FleetLedger • Audit Running Chart</span>
           </div>
           <div className="flex items-center gap-3">
             {user && (
@@ -116,13 +108,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </div>
-        {/* Mobile Global Search Header — visible on Dashboard and Ledger when authenticated */}
-        {(pathname === '/' || pathname?.startsWith('/ledger')) && user && (
-          <div className="lg:hidden sticky top-16 z-30 bg-paper-sheet/95 backdrop-blur border-b border-rule-line px-4 py-2.5">
-            <GlobalSearchInput />
-          </div>
-        )}
-
         <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {children}
         </main>

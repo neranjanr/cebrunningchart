@@ -294,8 +294,8 @@ export function filterAndSortTrips(trips: Trip[], opts: FilterOptions): Trip[] {
     switch (column) {
       case 'date':
         cmp = a.date.localeCompare(b.date);
+        if (cmp === 0) cmp = a.end_km - b.end_km;
         if (cmp === 0) cmp = a.start_time.localeCompare(b.start_time);
-        if (cmp === 0) cmp = a.trip_index - b.trip_index;
         break;
       case 'start_km':
         cmp = a.start_km - b.start_km;

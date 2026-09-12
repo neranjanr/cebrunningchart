@@ -84,13 +84,13 @@ _Avoid_: Data import, upload
 **Estimated Start Time**: Suggested Start Time derived as End Time − (Distance / 20 km/h), ceiled to the nearest 5 minutes; auto-filled only when Start Time is empty and editable.
 _Avoid_: Calculated start, inferred start
 
-**Global Search**: Header search that live-filters all Trips across all Pages by date, places visited, fuel order no, type, and KM substrings, showing filtered count and summed distances.
+**Global Search**: (Removed) Header search that previously live-filtered all Trips. Search is now available only within the All Trips Master Table section.
 _Avoid_: Finder, lookup
 
 **Continuity Break**: A ledger gap where Page N End KM ≠ Page N+1 Start KM or End Fuel Balance ≠ next Start Fuel Balance, surfaced as an alert banner with optional recalculation.
 _Avoid_: Mismatch, discontinuity error
 
-**Continuity Alert**: Persistent, non-dismissible banner/drawer listing every KM Gap (RED) and Fuel Gap (AMBER) at Page-to-Page and Trip-to-Trip levels; survives refresh, shows expected vs actual and jump-to-page/trip links, clears only when gaps are fixed or missing records are added to close them (no auto-recalc).
+**Continuity Alert**: Persistent, non-dismissible banner/drawer listing every KM Gap (RED) and Fuel Gap (AMBER) at Page-to-Page and Trip-to-Trip levels; survives refresh, shows expected vs actual and jump-to-page/trip links, clears only when gaps are fixed or missing records are added to close them (no auto-recalc). Dashboard shows a compact alert bar ("Continuity Gaps Detected") with a "View All Trips" link; All Trips and Ledger pages show the full detailed alert.
 _Avoid_: Toast alert, dismissible warning
 
 **All Trips Workbook**: Excel file named per All Trips table with Sheet "All Trips" and header row `Date | Start KM | End KM | Distance | Start Time | End Time | Type | Places Visited | Fuel Pumped | Fuel Order No` (case-insensitive, order-enforced); export writes that sheet, import validates pre-flight and appends chronologically without overwriting.

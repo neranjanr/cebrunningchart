@@ -28,6 +28,13 @@ export function BookLedgerView({ pages, trips, vehicle, initialPageNumber }: Pro
     return 1;
   });
 
+  // Navigate to initial page when URL search param changes (e.g., Jump to Page from continuity banner)
+  useEffect(() => {
+    if (initialPageNumber && initialPageNumber !== currentPageNumber) {
+      setCurrentPageNumber(initialPageNumber);
+    }
+  }, [initialPageNumber]);
+
   // Keep currentPageNumber in sync if pages load later
   useEffect(() => {
     if (sortedPages.length > 0) {

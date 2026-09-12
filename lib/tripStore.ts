@@ -236,6 +236,89 @@ export async function saveTrip(input: TripInput): Promise<Trip> {
   return newTrip;
 }
 
+export interface TripUpdateFields {
+  start_km?: number;
+  end_km?: number;
+  trip_distance?: number;
+  start_time?: string;
+  end_time?: string;
+  trip_type?: 'Official' | 'Private';
+  places_visited?: string;
+  fuel_pumped_amount?: number;
+  fuel_order_no?: string;
+}
+
+export async function updateTrip(tripId: string, fields: TripUpdateFields): Promise<Trip | null> {
+  const trips = await getTrips();
+  const idx = trips.findIndex((t) => t.id === tripId);
+  if (idx === -1) return null;
+
+  const existing = trips[idx];
+  const updated: Trip = {
+    ...existing,
+    ...fields,
+    start_km: fields.start_km !== undefined ? roundToIntegerKm(fields.start_km) : existing.start_km,
+    end_km: fields.end_km !== undefined ? roundToIntegerKm(fields.end_km) : existing.end_km,
+    trip_distance: fields.trip_distance !== undefined
+      ? roundToIntegerKm(fields.trip_distance)
+      : fields.start_km !== undefined || fields.end_km !== undefined
+        ? roundToIntegerKm((fields.end_km ?? existing.end_km) - (fields.start_km ?? existing.start_km))
+        : existing.trip_distance,
+    fuel_pumped_amount: fields.fuel_pumped_amount !== undefined ? roundToOneDecimal(fields.fuel_pumped_amount) : existing.fuel_pumped_amount,
+  };
+
+  // Persist to Supabase or localStorage
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase.from('trips').update(updated).eq('id', tripId).select().single();
+      if (data && !error) {
+        // Recalculate page end values if KM changed
+        if (fields.start_km !== undefined || fields.end_km !== undefined) {
+          await recalculatePageEndForTrip(updated);
+        }
+        return data as Trip;
+      }
+    } catch (e) {
+      console.warn('Failed to update trip in Supabase, updating locally', e);
+    }
+  }
+
+  // localStorage fallback
+  const localTrips = readLocalTrips();
+  const localIdx = localTrips.findIndex((t) => t.id === tripId);
+  if (localIdx >= 0) {
+    localTrips[localIdx] = updated;
+    writeLocalTrips(localTrips);
+  }
+
+  // Recalculate page end values if KM changed
+  if (fields.start_km !== undefined || fields.end_km !== undefined) {
+    await recalculatePageEndForTrip(updated);
+  }
+
+  return updated;
+}
+
+async function recalculatePageEndForTrip(trip: Trip): Promise<void> {
+  const pages = await getPages();
+  const allTrips = await getTrips();
+  const page = pages.find((p) => p.id === trip.page_id);
+  if (!page) return;
+
+  // Find the last trip on this page (by end_km descending) to update page end_km
+  const pageTrips = allTrips.filter((t) => t.page_id === trip.page_id);
+  const lastTrip = pageTrips.reduce((latest, t) => (t.end_km > latest.end_km ? t : latest), pageTrips[0]);
+
+  if (lastTrip) {
+    const defaultEconomy = 10.5;
+    const dayDistance = roundToIntegerKm(lastTrip.trip_distance);
+    const consumed = calculateConsumed(dayDistance, defaultEconomy);
+    const fuelPumped = roundToOneDecimal(lastTrip.fuel_pumped_amount ?? 0);
+    const newEndFuel = calculateBalance(roundToOneDecimal(page.end_fuel_balance), fuelPumped, consumed);
+    await updatePageEndValues(page.id, roundToIntegerKm(lastTrip.end_km), newEndFuel);
+  }
+}
+
 export function clearTrips(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(LOCAL_STORAGE_KEY);

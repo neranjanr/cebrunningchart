@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { BookLedgerView } from '@/components/ledger/BookLedgerView';
 import { getPages } from '@/lib/pageStore';
 import { getTrips } from '@/lib/tripStore';
@@ -9,7 +10,11 @@ import type { BookPage, Trip, Vehicle } from '@/types';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ContinuityAlertBanner } from '@/components/ContinuityAlertBanner';
 
-export default function LedgerPage() {
+function LedgerContent() {
+  const searchParams = useSearchParams();
+  const initialPage = searchParams.get('page');
+  const initialPageNumber = initialPage ? parseInt(initialPage, 10) : undefined;
+
   const [pages, setPages] = useState<BookPage[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -34,11 +39,19 @@ export default function LedgerPage() {
   }
 
   return (
+    <div className="flex flex-col gap-4">
+      <ContinuityAlertBanner pages={pages} trips={trips} />
+      <BookLedgerView pages={pages} trips={trips} vehicle={vehicle} initialPageNumber={initialPageNumber} />
+    </div>
+  );
+}
+
+export default function LedgerPage() {
+  return (
     <ProtectedRoute>
-      <div className="flex flex-col gap-4">
-        <ContinuityAlertBanner pages={pages} trips={trips} />
-        <BookLedgerView pages={pages} trips={trips} vehicle={vehicle} />
-      </div>
+      <Suspense fallback={<div className="p-8 text-center text-on-surface-variant">Loading ledger...</div>}>
+        <LedgerContent />
+      </Suspense>
     </ProtectedRoute>
   );
 }

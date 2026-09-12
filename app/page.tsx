@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { BookPage, Trip, Vehicle } from '@/types';
 import { getVehicleProfile } from '@/lib/vehicleStore';
@@ -11,7 +11,6 @@ import { MetricCards } from '@/components/dashboard/MetricCards';
 import { MonthlyBreakdownChart } from '@/components/dashboard/MonthlyBreakdownChart';
 import { PageWiseChart } from '@/components/dashboard/PageWiseChart';
 import { AllTripsMasterTable } from '@/components/dashboard/AllTripsMasterTable';
-import { ExcelExportButton } from '@/components/ExcelExportButton';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ContinuityAlertBanner } from '@/components/ContinuityAlertBanner';
 
@@ -20,6 +19,16 @@ export default function DashboardPage() {
   const [pages, setPages] = useState<BookPage[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refresh = useCallback(() => {
+    Promise.all([getVehicleProfile(), getPages(), getTrips()]).then(([v, p, t]) => {
+      setVehicle(v);
+      setPages(p);
+      setTrips(t);
+      setRefreshKey((k) => k + 1);
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -55,17 +64,13 @@ export default function DashboardPage() {
             <p className="text-sm text-on-surface-variant">Summary metrics, monthly breakdown, page-wise visualization, and master trip ledger.</p>
           </div>
           <div className="flex items-center gap-2">
-            <ExcelExportButton pages={pages} trips={trips} vehicle={vehicle} variant="secondary" />
             <Link href="/trips/new" className="px-4 py-2 bg-slate-surface text-on-primary rounded-lg text-sm font-semibold hover:bg-primary transition-colors">
               + New Trip
-            </Link>
-            <Link href="/ledger" className="px-4 py-2 bg-paper-sheet border border-rule-line text-on-surface rounded-lg text-sm font-semibold hover:bg-paper-gutter transition-colors">
-              Open Ledger
             </Link>
           </div>
         </div>
 
-        <ContinuityAlertBanner pages={pages} trips={trips} />
+        <ContinuityAlertBanner pages={pages} trips={trips} compact />
 
       {/* Metric cards */}
       <MetricCards metrics={metrics} />
@@ -99,7 +104,7 @@ export default function DashboardPage() {
             <PageWiseChart data={pageWise} />
           </div>
 
-          <AllTripsMasterTable trips={trips} pages={pages} />
+          <AllTripsMasterTable key={refreshKey} trips={trips} pages={pages} onDataChanged={refresh} />
         </>
       )}
       </div>

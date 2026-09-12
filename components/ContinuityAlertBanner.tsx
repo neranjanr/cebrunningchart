@@ -8,9 +8,10 @@ import Link from 'next/link';
 interface Props {
   pages: BookPage[];
   trips: Trip[];
+  compact?: boolean;
 }
 
-export function ContinuityAlertBanner({ pages, trips }: Props) {
+export function ContinuityAlertBanner({ pages, trips, compact = false }: Props) {
   const pageGaps = useMemo(() => detectPageGaps(pages), [pages]);
   const tripGaps = useMemo(() => detectTripGaps(trips), [trips]);
 
@@ -19,6 +20,31 @@ export function ContinuityAlertBanner({ pages, trips }: Props) {
 
   if (pageGaps.length === 0 && tripGaps.length === 0) {
     return null;
+  }
+
+  if (compact) {
+    return (
+      <div data-testid="continuity-alert-banner" className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-600 rounded-xl p-4 shadow-md flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200 tracking-tight">
+              Continuity Gaps Detected ({kmGapsCount} KM Gaps · {fuelGapsCount} Fuel Gaps)
+            </h2>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Odometer or fuel discrepancies found. Click to inspect in All Trips.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/trips"
+          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+          data-testid="view-all-trips-btn"
+        >
+          View All Trips
+        </Link>
+      </div>
+    );
   }
 
   return (

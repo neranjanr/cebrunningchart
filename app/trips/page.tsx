@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { BookPage, Trip } from '@/types';
 import { getPages } from '@/lib/pageStore';
@@ -13,6 +13,15 @@ export default function TripsMasterPage() {
   const [pages, setPages] = useState<BookPage[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refresh = useCallback(() => {
+    Promise.all([getPages(), getTrips()]).then(([p, t]) => {
+      setPages(p);
+      setTrips(t);
+      setRefreshKey((k) => k + 1);
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -56,7 +65,7 @@ export default function TripsMasterPage() {
             </Link>
           </div>
         ) : (
-          <AllTripsMasterTable trips={trips} pages={pages} compact={false} />
+          <AllTripsMasterTable key={refreshKey} trips={trips} pages={pages} compact={false} onDataChanged={refresh} />
         )}
       </div>
     </ProtectedRoute>
