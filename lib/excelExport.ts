@@ -5,7 +5,7 @@
  */
 import ExcelJS from 'exceljs';
 import type { BookPage, Trip, Vehicle } from '@/types';
-import { roundToOneDecimal, getDayOfWeek } from './tripCalculations';
+import { roundToOneDecimal, roundToIntegerKm, getDayOfWeek } from './tripCalculations';
 import { computeLedgerDays, computeLedgerSummary, groupTripsByDateForSide1 } from './ledgerCalculations';
 
 export interface ExcelExportParams {
@@ -179,9 +179,9 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
             t.trip_index,
             t.start_time,
             t.end_time,
-            roundToOneDecimal(t.start_km),
-            roundToOneDecimal(t.end_km),
-            roundToOneDecimal(t.trip_distance),
+            roundToIntegerKm(t.start_km),
+            roundToIntegerKm(t.end_km),
+            roundToIntegerKm(t.trip_distance),
             t.trip_type,
             t.places_visited,
             fuelVoucher,
@@ -190,7 +190,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
             cell.font = { size: 8 };
             cell.alignment = { vertical: 'middle', wrapText: colNum === 9 };
             if (colNum === 5 || colNum === 6 || colNum === 7) {
-              cell.numFmt = '0.0';
+              cell.numFmt = '0';
               cell.alignment = { horizontal: 'right', vertical: 'middle' };
             }
             if (colNum === 7) cell.font = { bold: true, size: 8 };
@@ -206,9 +206,9 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
           '',
           '',
           '',
-          roundToOneDecimal(group.distance),
+          roundToIntegerKm(group.distance),
           '',
-          `Off: ${group.officialKm.toFixed(1)} km | Priv: ${group.privateKm.toFixed(1)} km`,
+          `Off: ${group.officialKm.toFixed(0)} km | Priv: ${group.privateKm.toFixed(0)} km`,
           '',
         ]);
         // Merge first 6 cells for label
@@ -217,7 +217,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
         subRow.getCell(1).font = { bold: true, size: 8, color: { argb: 'FF334155' } };
         subRow.getCell(1).alignment = { horizontal: 'right' };
         subRow.getCell(7).font = { bold: true, size: 8 };
-        subRow.getCell(7).numFmt = '0.0';
+        subRow.getCell(7).numFmt = '0';
         subRow.getCell(7).alignment = { horizontal: 'right' };
         subRow.getCell(8).font = { size: 7, color: { argb: 'FF64748B' } };
         subRow.getCell(8).alignment = { horizontal: 'left' };
@@ -229,9 +229,9 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
 
       // Grand totals
       const grandTotals = (() => {
-        const totalDistance = roundToOneDecimal(dayGroups.reduce((s, g) => s + g.distance, 0));
-        const officialKm = roundToOneDecimal(dayGroups.reduce((s, g) => s + g.officialKm, 0));
-        const privateKm = roundToOneDecimal(dayGroups.reduce((s, g) => s + g.privateKm, 0));
+        const totalDistance = roundToIntegerKm(dayGroups.reduce((s, g) => s + g.distance, 0));
+        const officialKm = roundToIntegerKm(dayGroups.reduce((s, g) => s + g.officialKm, 0));
+        const privateKm = roundToIntegerKm(dayGroups.reduce((s, g) => s + g.privateKm, 0));
         const tripCount = dayGroups.reduce((s, g) => s + g.trips.length, 0);
         return { totalDistance, officialKm, privateKm, tripCount };
       })();
@@ -244,7 +244,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
         '',
         grandTotals.totalDistance,
         '',
-        `Official: ${grandTotals.officialKm.toFixed(1)} KM | Private: ${grandTotals.privateKm.toFixed(1)} KM | Trips: ${grandTotals.tripCount}`,
+        `Official: ${grandTotals.officialKm.toFixed(0)} KM | Private: ${grandTotals.privateKm.toFixed(0)} KM | Trips: ${grandTotals.tripCount}`,
         '',
       ]);
       sheet.mergeCells(`A${grandRow.number}:F${grandRow.number}`);
@@ -254,7 +254,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
       grandRow.getCell(1).alignment = { horizontal: 'right' };
       grandRow.getCell(7).font = { bold: true, size: 8, color: { argb: 'FF6FFBBE' } };
       grandRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } } as ExcelJS.Fill;
-      grandRow.getCell(7).numFmt = '0.0';
+      grandRow.getCell(7).numFmt = '0';
       grandRow.getCell(7).alignment = { horizontal: 'right' };
       grandRow.getCell(8).font = { size: 7, color: { argb: 'FFD3E4FE' } };
       grandRow.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } } as ExcelJS.Fill;
@@ -300,9 +300,9 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
         const row = sheet.addRow([
           `Day ${d.dayIndex}`,
           d.dayLabel,
-          roundToOneDecimal(d.startKm),
-          roundToOneDecimal(d.endKm),
-          roundToOneDecimal(d.distance),
+          roundToIntegerKm(d.startKm),
+          roundToIntegerKm(d.endKm),
+          roundToIntegerKm(d.distance),
           `${roundToOneDecimal(d.fuelEconomy).toFixed(1)} ${sourceLabel}`,
           '',
           '',
@@ -314,7 +314,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
           cell.font = { size: 8 };
           cell.alignment = { vertical: 'middle', horizontal: col >= 3 && col <= 5 ? 'right' : col === 1 ? 'center' : 'left' };
           if (col === 3 || col === 4 || col === 5) {
-            cell.numFmt = '0.0';
+            cell.numFmt = '0';
           }
         });
         // Override economy cell to show numeric + label but keep numeric for tests: write separate cell for numeric?
@@ -338,7 +338,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
       t1Footer.getCell(1).font = { bold: true, size: 8 };
       t1Footer.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE9FF' } } as ExcelJS.Fill;
       t1Footer.getCell(5).font = { bold: true, size: 8 };
-      t1Footer.getCell(5).numFmt = '0.0';
+      t1Footer.getCell(5).numFmt = '0';
       t1Footer.getCell(5).alignment = { horizontal: 'right' };
       t1Footer.getCell(6).font = { bold: true, size: 8, color: { argb: 'FFD97706' } };
       t1Footer.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE9FF' } } as ExcelJS.Fill;
@@ -433,7 +433,7 @@ export function generateBookMirrorWorkbook(params: ExcelExportParams): ExcelJS.W
 
     // Continuity Verification Stamp
     const nextPageNum = page.page_number + 1;
-    const endKmVal = ledgerDays.length > 0 ? ledgerDays[ledgerDays.length - 1].endKm.toFixed(1) : page.end_km.toFixed(1);
+    const endKmVal = ledgerDays.length > 0 ? roundToIntegerKm(ledgerDays[ledgerDays.length - 1].endKm).toString() : roundToIntegerKm(page.end_km).toString();
     const continuityRow = sheet.addRow([`CONTINUITY VERIFICATION STAMP - Page ${page.page_number} Closed & Authenticated • Carried Forward Odometer: ${endKmVal} KM -> Page ${nextPageNum} Day 1 Start KM • Carried Forward Fuel Stock: ${summary.finalBalance.toFixed(1)} L -> Page ${nextPageNum} Opening Tank Balance • Continuity Check: Strict Valid`]);
     sheet.mergeCells(`A${continuityRow.number}:J${continuityRow.number}`);
     continuityRow.getCell(1).font = { bold: true, size: 7, color: { argb: 'FFFFFFFF' } };

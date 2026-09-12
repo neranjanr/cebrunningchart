@@ -112,7 +112,7 @@ describe('generateBookMirrorWorkbook', () => {
     expect(joined).toContain('Closing Balance');
   });
 
-  it('contains trip rows with correct distances rounded to 1 decimal', () => {
+  it('contains trip rows with correct integer distances', () => {
     const wb = generateBookMirrorWorkbook({ pages: [page14], trips, vehicle });
     const sheet = wb.worksheets[0];
     const allValues: string[] = [];
@@ -122,8 +122,8 @@ describe('generateBookMirrorWorkbook', () => {
       });
     });
     const joined = allValues.join(' | ');
-    // Check distances appear
-    expect(joined).toContain('24.3');
+    // Check distances appear (24.3 rounds to 24)
+    expect(joined).toContain('24');
     expect(joined).toContain('35.0');
     expect(joined).toContain('HQ Fleet Yard');
   });
