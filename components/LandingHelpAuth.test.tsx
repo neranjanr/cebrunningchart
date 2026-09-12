@@ -88,15 +88,17 @@ describe('Ticket 6 — Landing, Help, Toast, Header', () => {
       setAllowedEmailsState: vi.fn(),
     });
     render(<HelpPage />);
-    // 8 sections expected
+    // 10 sections expected
     expect(screen.getByText(/1\. Book Opening/)).toBeInTheDocument();
     expect(screen.getByText(/2\. Reciprocal Calculations/)).toBeInTheDocument();
     expect(screen.getByText(/3\. Time Estimation/)).toBeInTheDocument();
-    expect(screen.getByText(/4\. Import Template/)).toBeInTheDocument();
+    expect(screen.getByText(/4\. All Trips Workbook Import Template/)).toBeInTheDocument();
     expect(screen.getByText(/5\. Pagination Rules/)).toBeInTheDocument();
     expect(screen.getByText(/6\. Fuel Formula/)).toBeInTheDocument();
-    expect(screen.getByText(/7\. Retroactive Renumber/)).toBeInTheDocument();
-    expect(screen.getByText(/8\. Auth Roles/)).toBeInTheDocument();
+    expect(screen.getByText(/7\. Adjusted Fuel Economy/)).toBeInTheDocument();
+    expect(screen.getByText(/8\. Retroactive Renumber/)).toBeInTheDocument();
+    expect(screen.getByText(/9\. Continuity Alerts/)).toBeInTheDocument();
+    expect(screen.getByText(/10\. Auth Roles/)).toBeInTheDocument();
   });
 
   it('AppShell header Help link (?) visible only after login', async () => {
