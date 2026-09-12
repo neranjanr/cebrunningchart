@@ -5,7 +5,15 @@
 import ExcelJS from 'exceljs';
 import type { Trip, BookPage } from '@/types';
 import { roundToIntegerKm, roundToOneDecimal } from './tripCalculations';
-import { assignPageForNewTrip, validateTripForPage, isBackdatedInsertion, renumberPagesChronologically, recalculatePageBalancesFromOpening, BookOpening } from './pagination';
+import {
+  assignPageForNewTrip,
+  isBackdatedInsertion,
+  renumberPagesChronologically,
+  recalculatePageBalancesFromOpening,
+  MAX_TRIPS_PER_DAY,
+  getMonthKey,
+} from './pagination';
+import type { BookOpening } from './pagination';
 
 export const ALL_TRIPS_HEADERS = [
   'Date',
@@ -119,6 +127,31 @@ export interface ImportParseResult {
   errors: ImportError[];
 }
 
+export interface ImportResult {
+  success: boolean;
+  appendedCount: number;
+  skippedDuplicates: number;
+  errors: ImportError[];
+  pages: BookPage[];
+  trips: Trip[];
+}
+
+/**
+ * Validate header row is case-insensitive and order-enforced.
+ * Returns true if headers match exactly (case-insensitive, same order).
+ */
+export function validateHeaders(rowValues: string[]): boolean {
+  if (rowValues.length !== ALL_TRIPS_HEADERS.length) return false;
+  return rowValues.every((val, idx) => val.toLowerCase() === ALL_TRIPS_HEADERS[idx].toLowerCase());
+}
+
+/**
+ * Generate a duplicate key from trip fields for deduplication.
+ */
+export function getDuplicateKey(trip: Partial<Trip>): string {
+  return `${trip.date}|${trip.start_km}|${trip.end_km}|${trip.end_time}`;
+}
+
 export async function parseAllTripsWorkbook(buffer: ArrayBuffer): Promise<ImportParseResult> {
   const workbook = new ExcelJS.Workbook();
   try {
@@ -149,6 +182,21 @@ export async function parseAllTripsWorkbook(buffer: ArrayBuffer): Promise<Import
   });
 
   if (headerRowIndex === 0) headerRowIndex = 1;
+
+  // Validate header row (case-insensitive, order-enforced)
+  const headerRow = sheet.getRow(headerRowIndex);
+  const headerValues: string[] = [];
+  headerRow.eachCell({ includeEmpty: true }, (cell) => {
+    headerValues.push(String(cell.value ?? ''));
+  });
+
+  if (!validateHeaders(headerValues)) {
+    return {
+      valid: false,
+      trips: [],
+      errors: [{ row: headerRowIndex, field: 'headers', message: `Invalid header row. Expected: ${ALL_TRIPS_HEADERS.join(', ')}` }],
+    };
+  }
 
   sheet.eachRow((row, rowIdx) => {
     if (rowIdx <= headerRowIndex) return;
@@ -221,5 +269,204 @@ export async function parseAllTripsWorkbook(buffer: ArrayBuffer): Promise<Import
     valid: errors.length === 0,
     trips: parsedTrips,
     errors,
+  };
+}
+
+/**
+ * Create a Trip object from a Partial<Trip> with defaults.
+ */
+function createTripFromPartial(partial: Partial<Trip>, vehicleId: string, pageId: string, dayIndex: number, tripIndex: number, idPrefix: string, index: number): Trip {
+  return {
+    id: `${idPrefix}-${index}`,
+    page_id: pageId,
+    vehicle_id: vehicleId,
+    date: partial.date ?? '',
+    day_index: dayIndex,
+    trip_index: tripIndex,
+    start_time: partial.start_time ?? '',
+    end_time: partial.end_time ?? '',
+    start_km: partial.start_km ?? 0,
+    end_km: partial.end_km ?? 0,
+    trip_distance: partial.trip_distance ?? 0,
+    trip_type: partial.trip_type ?? 'Official',
+    places_visited: partial.places_visited ?? '',
+    fuel_pumped_amount: partial.fuel_pumped_amount,
+    fuel_order_no: partial.fuel_order_no,
+  };
+}
+
+/**
+ * Create a BookPage object for a new page.
+ */
+function createBookPage(pageId: string, vehicleId: string, pageNumber: number, date: string, startKm: number, endKm: number): BookPage {
+  return {
+    id: pageId,
+    vehicle_id: vehicleId,
+    page_number: pageNumber,
+    month: getMonthKey(date),
+    start_km: startKm,
+    end_km: endKm,
+    start_fuel_balance: 0,
+    end_fuel_balance: 0,
+  };
+}
+
+/**
+ * Pre-flight pagination validation for imported trips.
+ * Checks 4/13/month constraints as if trips were added chronologically.
+ * Returns errors if any pagination rule would be violated.
+ */
+export function validatePaginationForImport(
+  existingTrips: Trip[],
+  existingPages: BookPage[],
+  importedTrips: Partial<Trip>[]
+): ImportError[] {
+  const errors: ImportError[] = [];
+
+  // Sort imported trips chronologically
+  const sorted = [...importedTrips]
+    .filter(t => t.date && t.start_km !== undefined)
+    .sort((a, b) => (a.date!).localeCompare(b.date!) || (a.start_km ?? 0) - (b.start_km ?? 0));
+
+  // Simulate adding trips one by one to check pagination
+  let simulatedTrips = [...existingTrips];
+  let simulatedPages = [...existingPages];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const trip = sorted[i];
+    const result = assignPageForNewTrip({
+      pages: simulatedPages,
+      trips: simulatedTrips,
+      newTripDate: trip.date!,
+    });
+
+    if ('allowed' in result && !result.allowed) {
+      errors.push({
+        row: i + 2, // +2 for 1-indexed and header row
+        field: 'pagination',
+        message: `Trip would violate ${result.reason}: max ${MAX_TRIPS_PER_DAY} trips per day`,
+      });
+    } else if ('pageId' in result) {
+      const vehicleId = existingTrips[0]?.vehicle_id ?? '';
+      const tempTrip = createTripFromPartial(trip, vehicleId, result.pageId, result.dayIndex, result.tripIndex, 'temp', i);
+
+      if (result.requiresNewPage) {
+        const newPage = createBookPage(result.pageId, vehicleId, result.pageNumber, trip.date!, trip.start_km ?? 0, trip.end_km ?? 0);
+        simulatedPages.push(newPage);
+      }
+
+      simulatedTrips.push(tempTrip);
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Import trips from a parsed workbook result.
+ * Appends trips chronologically, handles backdated renumber, and detects duplicates.
+ * This is a pure function that returns the new state without mutating inputs.
+ */
+export function importTripsFromWorkbook(params: {
+  existingTrips: Trip[];
+  existingPages: BookPage[];
+  parsedTrips: Partial<Trip>[];
+  vehicleId: string;
+  opening: BookOpening;
+  economy?: number;
+  inTanksByPage?: Record<string, (number | null | undefined)[]>;
+}): ImportResult {
+  const { existingTrips, existingPages, parsedTrips, vehicleId, opening, economy = 10.5, inTanksByPage } = params;
+
+  // Build duplicate lookup from existing trips
+  const existingKeys = new Set(existingTrips.map(getDuplicateKey));
+
+  // Filter out duplicates and sort chronologically
+  const uniqueTrips: Partial<Trip>[] = [];
+  let skippedDuplicates = 0;
+
+  for (const trip of parsedTrips) {
+    const key = getDuplicateKey(trip);
+    if (existingKeys.has(key)) {
+      skippedDuplicates++;
+      continue;
+    }
+    existingKeys.add(key); // Also prevent duplicates within the import batch
+    uniqueTrips.push(trip);
+  }
+
+  if (uniqueTrips.length === 0) {
+    return {
+      success: true,
+      appendedCount: 0,
+      skippedDuplicates,
+      errors: [],
+      pages: existingPages,
+      trips: existingTrips,
+    };
+  }
+
+  // Sort trips chronologically
+  const sorted = [...uniqueTrips].sort((a, b) =>
+    (a.date ?? '').localeCompare(b.date ?? '') || (a.start_km ?? 0) - (b.start_km ?? 0)
+  );
+
+  // Append trips one by one, paginating via assignPageForNewTrip
+  let currentTrips = [...existingTrips];
+  let currentPages = [...existingPages];
+  const newTrips: Trip[] = [];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const trip = sorted[i];
+    const result = assignPageForNewTrip({
+      pages: currentPages,
+      trips: currentTrips,
+      newTripDate: trip.date!,
+    });
+
+    if ('allowed' in result && !result.allowed) {
+      // Should not happen after pre-flight validation, but handle gracefully
+      continue;
+    }
+
+    if ('pageId' in result) {
+      const newTrip = createTripFromPartial(trip, vehicleId, result.pageId, result.dayIndex, result.tripIndex, `import-${Date.now()}`, i);
+
+      if (result.requiresNewPage) {
+        const newPage = createBookPage(result.pageId, vehicleId, result.pageNumber, trip.date!, trip.start_km ?? 0, trip.end_km ?? 0);
+        currentPages.push(newPage);
+      }
+
+      currentTrips.push(newTrip);
+      newTrips.push(newTrip);
+    }
+  }
+
+  // Check if backdated insertion occurred
+  const backdated = isBackdatedInsertion(currentPages, currentTrips, sorted[0].date!);
+
+  // If backdated, renumber pages and recalculate balances
+  if (backdated) {
+    const renumbered = renumberPagesChronologically(currentPages, currentTrips);
+    currentPages = renumbered.pages;
+    currentTrips = renumbered.trips;
+
+    const recalculated = recalculatePageBalancesFromOpening({
+      pages: currentPages,
+      trips: currentTrips,
+      opening,
+      economy,
+      inTanksByPage,
+    });
+    currentPages = recalculated;
+  }
+
+  return {
+    success: true,
+    appendedCount: newTrips.length,
+    skippedDuplicates,
+    errors: [],
+    pages: currentPages,
+    trips: currentTrips,
   };
 }
