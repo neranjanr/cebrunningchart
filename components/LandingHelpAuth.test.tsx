@@ -67,7 +67,9 @@ describe('Ticket 6 — Landing, Help, Toast, Header', () => {
     expect(screen.getByTestId('super-admin-username')).toBeInTheDocument();
     expect(screen.getByTestId('super-admin-password')).toBeInTheDocument();
     expect(screen.getByTestId('super-admin-login-button')).toBeInTheDocument();
-    expect(screen.getByTestId('google-sso-button')).toBeInTheDocument();
+    // Google SSO removed per ADR-0010 — Landing now shows Recovery link and TOTP instead
+    expect(screen.queryByTestId('google-sso-button')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recovery-link')).toBeInTheDocument();
     expect(screen.getByTestId('landing-error')).toHaveTextContent('Not authorized — contact admin');
   });
 

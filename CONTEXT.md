@@ -61,16 +61,22 @@ _Avoid_: Fuel mismatch, tank gap
 
 ### Auth & Access
 
-**Super Admin**: The single bootstrap account (Neranjan) authenticated by password, must change password on first login, and solely manages the Allowed Email list.
+**Super Admin**: The single Operator account (Neranjan) authenticated by password plus TOTP, must change bootstrap password and enroll TOTP on first login; the system is single-operator with no other users.
 _Avoid_: Admin, owner
 
-**Allowed Email**: A Gmail address on the SSO allow-list defined by the Super Admin; only these addresses can sign in via Google OAuth, others see only the Landing page.
-_Avoid_: Whitelisted user, approved account
+**TOTP**: Time-based one-time password (RFC 6238, 30s step, ±1 window) via Google Authenticator; secret encrypted at rest (AES-256-GCM) and required on every login after enrollment.
+_Avoid_: OTP, 2FA code
 
-**Landing**: The public unauthenticated entry page showing login (Super Admin password + Google SSO) and no ledger data.
+**Recovery Code**: Single-use 64-character (256-bit) fallback generated once at enrollment, displayed once for offline saving, stored hashed with bcrypt; entered at /recovery it bypasses password and TOTP and creates a short recovery session that forces immediate password reset, TOTP re-enrollment, and new code generation.
+_Avoid_: Backup password, long password
+
+**Session**: Authenticated state via httpOnly Secure cookie (session_token) bound to sessions table with absolute 30-day expiry and 7-day idle timeout (sliding on activity), revoked on password, TOTP, or recovery reset.
+_Avoid_: JWT, localStorage session
+
+**Landing**: The public unauthenticated entry page showing Super Admin login (password + TOTP) and Recovery entry; no ledger data.
 _Avoid_: Homepage, login screen
 
-**Landing Gate**: Strict auth guard where every route except Landing hard-redirects to Landing when unauthenticated, before any ledger or vehicle data fetch; no flash of data, session expiry also redirects with toast.
+**Landing Gate**: Strict auth guard where every route except Landing and /recovery hard-redirects to Landing when unauthenticated, before any ledger or vehicle data fetch; no flash of data, session expiry also redirects with toast.
 _Avoid_: Soft gate, lazy redirect
 
 ### UX & Operations

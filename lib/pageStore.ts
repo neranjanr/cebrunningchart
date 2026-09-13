@@ -151,10 +151,19 @@ export async function applyChronologicalRenumber(): Promise<{ pages: BookPage[];
     opening: { openingKm: roundToIntegerKm(vehicle.current_odometer ?? 0), openingFuel: roundToOneDecimal((vehicle as any).current_fuel_level ?? 10) },
   });
 
-  // Persist renumbered pages
+  // Persist renumbered pages and trips (trips need page_id cascade)
   for (const page of recalculated) {
     await savePage(page);
   }
+  // persist renumbered trips page_id mapping
+  try {
+    const { default: tripStore } = await import('./tripStore');
+    // direct localStorage write to avoid API round-trip
+    if (typeof window !== 'undefined') {
+      const TRIPS_KEY = 'fleetledger_trips';
+      localStorage.setItem(TRIPS_KEY, JSON.stringify(renumberedTrips));
+    }
+  } catch { /* ignore */ }
   return { pages: recalculated, trips: renumberedTrips };
 }
 

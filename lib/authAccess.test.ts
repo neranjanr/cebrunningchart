@@ -10,28 +10,34 @@ import {
   clearSuperAdminState,
   validateSuperAdminCredentials,
   changeSuperAdminPassword,
+  generateTOTPSecret,
+  buildTOTPURI,
+  encryptTOTPSecret,
+  decryptTOTPSecret,
+  verifyTOTP,
+  generateRecoveryCode,
+  hashRecoveryCode,
+  verifyRecoveryCode,
   normalizeEmail,
   isValidEmail,
   getAllowedEmails,
-  setAllowedEmails,
-  addAllowedEmail,
-  removeAllowedEmail,
-  isAllowedEmail,
   canGoogleUserSignIn,
 } from './authAccess';
 
-describe('authAccess — Super Admin & Allow-list seam (Phase 2 #06)', () => {
+describe('authAccess — Super Admin + TOTP + Recovery (ADR-0010)', () => {
   beforeEach(() => {
     localStorage.clear();
     clearSuperAdminState();
   });
 
-  it('hashPassword produces bootstrap hash for SupAd@2000', async () => {
+  it('hashPassword produces bcrypt hash that verifies', async () => {
     const h = await hashPassword('SupAd@2000');
-    expect(h.toLowerCase()).toBe(BOOTSTRAP_PASSWORD_HASH.toLowerCase());
+    expect(h.startsWith('$2')).toBe(true);
+    expect(await verifyPassword('SupAd@2000', h)).toBe(true);
+    expect(await verifyPassword('wrong', h)).toBe(false);
   });
 
-  it('verifyPassword matches bootstrap', async () => {
+  it('verifyPassword still accepts legacy SHA bootstrap hash', async () => {
     expect(await verifyPassword('SupAd@2000', BOOTSTRAP_PASSWORD_HASH)).toBe(true);
     expect(await verifyPassword('wrong', BOOTSTRAP_PASSWORD_HASH)).toBe(false);
   });
@@ -39,7 +45,7 @@ describe('authAccess — Super Admin & Allow-list seam (Phase 2 #06)', () => {
   it('isSuperAdminUsername strict case-sensitive Neranjan', () => {
     expect(isSuperAdminUsername('Neranjan')).toBe(true);
     expect(isSuperAdminUsername('neranjan')).toBe(false);
-    expect(isSuperAdminUsername(' Neranjan ')).toBe(true); // trims
+    expect(isSuperAdminUsername(' Neranjan ')).toBe(true);
     expect(isSuperAdminUsername('Admin')).toBe(false);
   });
 
@@ -68,7 +74,6 @@ describe('authAccess — Super Admin & Allow-list seam (Phase 2 #06)', () => {
     expect(state.mustChangePassword).toBe(false);
     expect(await verifyPassword('NewPass123', state.passwordHash)).toBe(true);
     expect(await verifyPassword('SupAd@2000', state.passwordHash)).toBe(false);
-    // validate with new password
     const res = await validateSuperAdminCredentials('Neranjan', 'NewPass123');
     expect(res.valid).toBe(true);
     expect(res.mustChangePassword).toBe(false);
@@ -83,70 +88,53 @@ describe('authAccess — Super Admin & Allow-list seam (Phase 2 #06)', () => {
     expect(r2.error).toMatch(/at least 6/);
   });
 
-  it('allow-list normalize and validation', () => {
+  it('TOTP secret generation + URI + encrypt/decrypt roundtrip', () => {
+    const secret = generateTOTPSecret();
+    expect(secret.length).toBeGreaterThanOrEqual(32);
+    const uri = buildTOTPURI(secret);
+    expect(uri.startsWith('otpauth://totp/')).toBe(true);
+    expect(uri).toContain('RunningChart');
+    const enc = encryptTOTPSecret(secret);
+    expect(enc).toContain(':');
+    const dec = decryptTOTPSecret(enc);
+    expect(dec).toBe(secret);
+  });
+
+  it('verifyTOTP validates current token within ±1 window', () => {
+    const { TOTP } = require('otpauth');
+    const secret = generateTOTPSecret();
+    const totp = new TOTP({ issuer: 'RunningChart', label: 'Neranjan', algorithm: 'SHA1', digits: 6, period: 30, secret });
+    const token = totp.generate();
+    expect(verifyTOTP(token, secret)).toBe(true);
+    expect(verifyTOTP('000000', secret)).toBe(false);
+    // encrypted secret also verifies
+    const enc = encryptTOTPSecret(secret);
+    expect(verifyTOTP(token, enc)).toBe(true);
+  });
+
+  it('Recovery Code is 64-hex grouped, hashes and verifies via bcrypt', async () => {
+    const code = generateRecoveryCode();
+    const hexOnly = code.replace(/-/g, '');
+    expect(hexOnly.length).toBe(64);
+    expect(/^[0-9a-f]+$/.test(hexOnly)).toBe(true);
+    expect(code.split('-').length).toBe(8);
+    const hash = await hashRecoveryCode(code);
+    expect(hash.startsWith('$2')).toBe(true);
+    expect(await verifyRecoveryCode(code, hash)).toBe(true);
+    expect(await verifyRecoveryCode('wrong-code', hash)).toBe(false);
+    expect(await verifyRecoveryCode(code, '')).toBe(false);
+  });
+
+  it('deprecated allow-list seam returns empty / removed error', () => {
     expect(normalizeEmail(' Test@Example.COM ')).toBe('test@example.com');
     expect(isValidEmail('user@gmail.com')).toBe(true);
-    expect(isValidEmail('bad')).toBe(false);
-    expect(isValidEmail('user@')).toBe(false);
-  });
-
-  it('getAllowedEmails empty by default, setAllowedEmails dedups and normalizes', () => {
     expect(getAllowedEmails()).toEqual([]);
-    const out = setAllowedEmails(['A@Gmail.com', 'a@gmail.com', 'B@gmail.com', 'invalid']);
-    expect(out).toEqual(['a@gmail.com', 'b@gmail.com']);
-    expect(getAllowedEmails()).toEqual(['a@gmail.com', 'b@gmail.com']);
-  });
-
-  it('addAllowedEmail case-insensitive dedup, invalid rejected', () => {
-    const r1 = addAllowedEmail('Driver@gmail.com');
-    expect(r1.added).toBe(true);
-    expect(r1.emails).toContain('driver@gmail.com');
-    const r2 = addAllowedEmail('driver@GMAIL.com');
-    expect(r2.added).toBe(false);
-    expect(r2.error).toMatch(/Already allowed/);
-    const r3 = addAllowedEmail('bad-email');
-    expect(r3.added).toBe(false);
-    expect(r3.error).toMatch(/Invalid/);
-  });
-
-  it('removeAllowedEmail', () => {
-    setAllowedEmails(['a@gmail.com', 'b@gmail.com']);
-    const r1 = removeAllowedEmail('A@GMAIL.COM');
-    expect(r1.removed).toBe(true);
-    expect(r1.emails).toEqual(['b@gmail.com']);
-    const r2 = removeAllowedEmail('nonexistent@gmail.com');
-    expect(r2.removed).toBe(false);
-  });
-
-  it('isAllowedEmail case-insensitive', () => {
-    setAllowedEmails(['allowed@gmail.com']);
-    expect(isAllowedEmail('ALLOWED@GMAIL.COM')).toBe(true);
-    expect(isAllowedEmail('other@gmail.com')).toBe(false);
-    expect(isAllowedEmail('allowed@gmail.com', ['allowed@gmail.com'])).toBe(true);
-    expect(isAllowedEmail('', [])).toBe(false);
-  });
-
-  it('canGoogleUserSignIn gated: allowed when in list, denied otherwise, empty list denies', () => {
-    setAllowedEmails(['allowed@gmail.com']);
-    expect(canGoogleUserSignIn('allowed@gmail.com').allowed).toBe(true);
-    expect(canGoogleUserSignIn('ALLOWED@GMAIL.COM').allowed).toBe(true);
-    const denied = canGoogleUserSignIn('other@gmail.com');
+    const denied = canGoogleUserSignIn('any@gmail.com');
     expect(denied.allowed).toBe(false);
-    expect(denied.reason).toBe('Not authorized — contact admin');
-    expect(canGoogleUserSignIn(null).allowed).toBe(false);
-    expect(canGoogleUserSignIn(null).reason).toBe('Not authorized — contact admin');
-    // empty allow-list denies even allowed user if list empty
-    setAllowedEmails([]);
-    expect(canGoogleUserSignIn('allowed@gmail.com').allowed).toBe(false);
+    expect(denied.reason).toMatch(/Google SSO removed/);
   });
 
-  it('canGoogleUserSignIn uses provided list param not storage', () => {
-    const list = ['a@gmail.com'];
-    expect(canGoogleUserSignIn('a@gmail.com', list).allowed).toBe(true);
-    expect(canGoogleUserSignIn('b@gmail.com', list).allowed).toBe(false);
-  });
-
-  it('super admin password hashed storage: setSuperAdminState persists', async () => {
+  it('super admin password hashed storage: setSuperAdminState persists bcrypt', async () => {
     const h = await hashPassword('CustomPass999');
     setSuperAdminState({ passwordHash: h, mustChangePassword: false });
     const s = getSuperAdminState();

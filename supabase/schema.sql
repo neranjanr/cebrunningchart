@@ -1,8 +1,15 @@
--- FleetLedger / Running Chart Database Schema
+-- RunningChart Database Schema (Railway Postgres, single-operator)
+-- No Supabase auth — auth via super_admin + TOTP + Recovery Code (ADR-0009/0010)
+-- Sessions: 30d absolute + 7d idle sliding (CONTEXT.md Session)
 
+-- Enable pgcrypto for gen_random_uuid
+create extension if not exists "pgcrypto";
+
+-- ---------------------------------------------------------------------------
+-- Core ledger (single-operator, no user_id FK)
+-- ---------------------------------------------------------------------------
 create table if not exists vehicles (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users(id) on delete cascade,
   brand text not null default 'Toyota',
   model text not null default 'Hilux',
   vehicle_type text not null default 'Cab / Double Cab',
@@ -18,7 +25,7 @@ create table if not exists book_pages (
   id uuid default gen_random_uuid() primary key,
   vehicle_id uuid references vehicles(id) on delete cascade not null,
   page_number integer not null,
-  month text not null, -- e.g. '2026-09'
+  month text not null,
   start_km numeric(10,1) not null default 0.0,
   end_km numeric(10,1) not null default 0.0,
   start_fuel_balance numeric(10,1) not null default 0.0,
@@ -54,7 +61,7 @@ create table if not exists fuel_logs (
   start_km_of_day numeric(10,1) not null default 0.0,
   end_km_of_day numeric(10,1) not null default 0.0,
   distance_travelled numeric(10,1) not null default 0.0,
-  fuel_economy numeric(10,1) not null default 10.0, -- km/L
+  fuel_economy numeric(10,1) not null default 10.0,
   fuel_position numeric(10,1) not null default 0.0,
   drawn_amount numeric(10,1) not null default 0.0,
   fuel_order_no text default '',
@@ -64,26 +71,42 @@ create table if not exists fuel_logs (
   unique(page_id, day_index)
 );
 
--- Row Level Security (RLS) policies
-alter table vehicles enable row level security;
-alter table book_pages enable row level security;
-alter table trips enable row level security;
-alter table fuel_logs enable row level security;
+-- ---------------------------------------------------------------------------
+-- Auth (ADR-0010): single Super Admin, TOTP (Google Authenticator), Recovery Code
+-- ---------------------------------------------------------------------------
+create table if not exists super_admin (
+  id uuid default gen_random_uuid() primary key,
+  username text not null unique default 'Neranjan',
+  password_hash text not null,
+  must_change_password boolean not null default true,
+  totp_secret_encrypted text,
+  totp_enabled boolean not null default false,
+  totp_verified_at timestamp with time zone,
+  recovery_code_hash text,
+  recovery_code_created_at timestamp with time zone,
+  recovery_code_used_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 
-create policy "Users can manage their own vehicles" on vehicles
-  for all using (auth.uid() = user_id or user_id is null);
+-- Seed bootstrap super admin if not exists (password SupAd@2000, bcrypt will replace SHA on first login)
+insert into super_admin (username, password_hash, must_change_password, totp_enabled)
+values ('Neranjan', '$2b$12$bootstrap_placeholder_will_be_rehashed_on_first_login', true, false)
+on conflict (username) do nothing;
 
-create policy "Users can manage pages for their vehicles" on book_pages
-  for all using (
-    exists (select 1 from vehicles where vehicles.id = book_pages.vehicle_id and (vehicles.user_id = auth.uid() or vehicles.user_id is null))
-  );
+create table if not exists sessions (
+  token text primary key,
+  user_role text not null default 'super_admin',
+  expires_at timestamp with time zone not null,
+  last_active_at timestamp with time zone not null default timezone('utc'::text, now()),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 
-create policy "Users can manage trips for their vehicles" on trips
-  for all using (
-    exists (select 1 from vehicles where vehicles.id = trips.vehicle_id and (vehicles.user_id = auth.uid() or vehicles.user_id is null))
-  );
+create index if not exists idx_sessions_expires_at on sessions(expires_at);
+create index if not exists idx_sessions_last_active_at on sessions(last_active_at);
 
-create policy "Users can manage fuel logs for their vehicles" on fuel_logs
-  for all using (
-    exists (select 1 from vehicles where vehicles.id = fuel_logs.vehicle_id and (vehicles.user_id = auth.uid() or vehicles.user_id is null))
-  );
+-- Drop legacy Supabase RLS if previously enabled
+alter table if exists vehicles disable row level security;
+alter table if exists book_pages disable row level security;
+alter table if exists trips disable row level security;
+alter table if exists fuel_logs disable row level security;

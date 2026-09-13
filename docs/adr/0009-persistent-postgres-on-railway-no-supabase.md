@@ -1,0 +1,5 @@
+# Persistent Postgres on Railway, no Supabase
+
+Hosting must be free, single-platform, and persistent — the `Book`/`Page`/`Trip` ledger cannot survive ephemeral storage. We decided to remove `supabase-js` and Supabase Auth/RLS entirely and run **Railway App + Managed Postgres** via a single `DATABASE_URL` (`lib/db.ts:3` `pg` Pool). `railway.json:1` already defines the build/deploy, and `supabase/schema.sql:1` is pure Postgres so migration is limited to dropping Supabase RLS policies and adding `sessions`/`super_admin` tables.
+
+Considered Vercel+Neon via Marketplace (best Next.js DX, 0.5 GB free, autosuspend ~300 ms), Fly.io with volume, and Render (free Postgres deletes after 90 days — rejected). Railway satisfies "everything in one platform" literally — compute and volume-backed DB share one dashboard/bill, survive redeploys, and keep `Closing Balance`/`Continuity Alert` continuity intact on the Hobby $5/mo free credit. Vercel remains available for previews but not the primary persistent store.
